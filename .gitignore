@@ -10,3 +10,8 @@ node_modules/
 .DS_Store
 resources/public/ui
 .store
+.clj-kondo/.cache
+.clj-kondo/cache
+.lsp
+.calva
+.#*

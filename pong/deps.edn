@@ -1,2 +1,3 @@
-{:deps {org.clojure/clojure {:mvn/version "1.10.1"}
-        quil/quil           {:mvn/version "3.1.0"}}}
+{:deps {org.clojure/clojure       {:mvn/version "1.10.1"}
+        quil/quil                 {:mvn/version "3.1.0"}
+        org.jbox2d/jbox2d-library {:mvn/version "2.2.1.1"}}}
