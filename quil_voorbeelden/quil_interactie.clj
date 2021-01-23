@@ -1,9 +1,12 @@
 (ns quil-interactie
   (:require [quil.core :as q]))
 
+(defn teken [])
+
 (q/defsketch mijn-sketch
   :size [800 800]
-  :draw identity)
+  :draw teken
+  :frame-rate 2)
 
 (alter-var-root #'quil.applet/*applet* (constantly mijn-sketch))
 
@@ -92,3 +95,11 @@
 ;; x y = middelpunt
 (q/ellipse 100 100 300 200)
 (q/ellipse 250 200 300 200)
+
+;; Zonder lijn, alleen invulling
+(q/no-stroke)
+
+(defn teken []
+  (willekeurige-lijn))
+
+(q/frame-rate 3)

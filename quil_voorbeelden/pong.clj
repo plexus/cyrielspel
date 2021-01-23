@@ -3,6 +3,9 @@
 
 (def snelheid 4)
 
+(def palet-dikte 20)
+(def palet-hoogte 140)
+(def bal-doorsnede 40)
 
 ;; De toestand van het spel, we beginnen met de twee paletten en de bal allemaal
 ;; in het midden.
@@ -62,31 +65,31 @@
     ;; Linkse palet raakt?
     (raakt-cirkel-rechthoek? (:bal-x huidige-toestand)
                              (:bal-y huidige-toestand)
-                             20
-                             20
+                             palet-dikte
+                             palet-dikte
                              (:palet1 huidige-toestand)
-                             20
-                             140)
+                             palet-dikte
+                             palet-hoogte)
     (assoc huidige-toestand
            :bal-snelheid-x snelheid
-           :bal-snelheid-y (- (/ (- (:bal-y huidige-toestand)
-                                    (:palet1 huidige-toestand))
-                                 45)
-                              snelheid))
+           :bal-snelheid-y (* snelheid (- (/ (- (:bal-y huidige-toestand)
+                                                (:palet1 huidige-toestand))
+                                             palet-hoogte)
+                                          0.5)))
     ;; Rechtse palet raakt?
     (raakt-cirkel-rechthoek? (:bal-x huidige-toestand)
                              (:bal-y huidige-toestand)
-                             20
-                             860
+                             palet-dikte
+                             (- (q/width) (* palet-dikte 2))
                              (:palet2 huidige-toestand)
-                             20
-                             140)
+                             palet-dikte
+                             palet-hoogte)
     (assoc huidige-toestand
            :bal-snelheid-x (- snelheid)
-           :bal-snelheid-y (- (/ (- (:bal-y huidige-toestand)
-                                    (:palet2 huidige-toestand))
-                                 45)
-                              snelheid))
+           :bal-snelheid-y (* snelheid (- (/ (- (:bal-y huidige-toestand)
+                                                (:palet2 huidige-toestand))
+                                             palet-hoogte)
+                                          0.5)))
     ;; Geen van beide raakt, doe niets
     :else
     huidige-toestand))
@@ -95,15 +98,16 @@
   "Verander de richting van de bal als een van de kanten van het venster geraakt
   wordt."
   [huidige-toestand]
-  (cond-> huidige-toestand
-    ;; Links of rechts (x-as)
-    (or (<= (:bal-x huidige-toestand) 20)
-        (<= 880 (:bal-x huidige-toestand)))
-    (update :bal-snelheid-x * -1)
-    ;; Boven of onder (y-as)
-    (or (<= (:bal-y huidige-toestand) 20)
-        (<= 380 (:bal-y huidige-toestand)))
-    (update :bal-snelheid-y * -1)))
+  (let [bal-straal (/ bal-doorsnede 2)]
+    (cond-> huidige-toestand
+      ;; Links of rechts (x-as)
+      (or (<= (:bal-x huidige-toestand) bal-straal)
+          (<= (- (q/width) bal-straal) (:bal-x huidige-toestand)))
+      (update :bal-snelheid-x * -1)
+      ;; Boven of onder (y-as)
+      (or (<= (:bal-y huidige-toestand) bal-straal)
+          (<= (- (q/height) bal-straal) (:bal-y huidige-toestand)))
+      (update :bal-snelheid-y * -1))))
 
 (defn initialiseer []
   (q/smooth)
@@ -111,11 +115,11 @@
 
 (defn teken-palet [x y]
   (q/fill 255) ; vul-kleur = wit
-  (q/rect x y 20 140)) ; teken rechthoek, breedte is 20, hoogte is 140
+  (q/rect x y palet-dikte palet-hoogte)) ; teken rechthoek
 
 (defn teken-bal [x y]
   (q/fill 255) ; vul-kleur = wit
-  (q/ellipse x y 40 40))
+  (q/ellipse x y bal-doorsnede bal-doorsnede))
 
 (defn volgende-toestand
   "Pas de toestand aan, beweeg eerst de bal, controleer dan of een van de paletten
@@ -133,8 +137,8 @@
   (swap! toestand volgende-toestand)
   (q/background 32)
   (q/fill 255)
-  (teken-palet 20 (:palet1 @toestand))
-  (teken-palet 860 (:palet2 @toestand))
+  (teken-palet palet-dikte (:palet1 @toestand))
+  (teken-palet (- (q/width) (* palet-dikte 2)) (:palet2 @toestand))
   (teken-bal (:bal-x @toestand) (:bal-y @toestand)))
 
 (defn toets-ingedrukt
