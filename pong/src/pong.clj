@@ -3,6 +3,7 @@
 
 (def snelheid 4)
 
+
 ;; De toestand van het spel, we beginnen met de twee paletten en de bal allemaal
 ;; in het midden.
 (def toestand (atom {;; Positie van de linkse palet langs de y-as, bovenzijde
