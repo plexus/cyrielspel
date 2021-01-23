@@ -1,12 +1,13 @@
 (ns quil-inleiding
   (:require [quil.core :as q]))
 
-(defn teken [])
+(defn teken []
+  (Thread/sleep 100))
 
 (q/defsketch mijn-sketch
   :size [800 800]
   :draw teken
-  :frame-rate 2)
+  :features [:keep-on-top])
 
 (alter-var-root #'quil.applet/*applet* (constantly mijn-sketch))
 
@@ -20,7 +21,6 @@
 (q/background 255) ; wit
 
 ;; Kleur, drie getallen voor rood, groen, blauw
-
 (q/background 255 0 0) ; 100% rood
 (q/background 0 255 0) ; 100% groen
 (q/background 0 0 255) ; 100% blauw
@@ -42,10 +42,10 @@
 ;; Kleur kiezen : https://www.google.com/search?q=color+picker
 
 ;; Lijnen tekenen
+(q/line 338 42 628 329)
 
 ;; Kies de kleur voor de lijn
 (q/stroke 166 58 43)
-(q/stroke 58 96 41)
 
 ;; Kies de dikte van de lijn
 (q/stroke-weight 5)
