@@ -1,4 +1,4 @@
-(ns quil-interactie
+(ns quil-inleiding
   (:require [quil.core :as q]))
 
 (defn teken [])
