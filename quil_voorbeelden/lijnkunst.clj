@@ -19,8 +19,10 @@
           (q/random (q/width)) (q/random (q/height))))
 
 (q/defsketch lijnkunst
-  :size [800 800]
+  :title "Lijnkunst"
+  :size [400 400]
   :setup initialiseer
-  :draw teken)
+  :draw teken
+  :features [:keep-on-top])
 
 #_(alter-var-root #'quil.applet/*applet* (constantly lijnkunst))

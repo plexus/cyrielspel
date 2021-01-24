@@ -1,15 +1,19 @@
 (ns quil-inleiding
-  (:require [quil.core :as q]))
+  (:require [quil.core :as q]
+            [quil-extras :as e]))
 
 (defn teken []
   (Thread/sleep 100))
 
 (q/defsketch mijn-sketch
-  :size [800 800]
+  :title "Mijn sketch"
+  :size [400 400]
   :draw teken
   :features [:keep-on-top])
 
 (alter-var-root #'quil.applet/*applet* (constantly mijn-sketch))
+
+(e/achtergrond "./rickrolled.jpg")
 
 ;; Met (q/background ...) kan je de volledige achtergrond een kleur geven.
 ;; Er zijn twee versies:

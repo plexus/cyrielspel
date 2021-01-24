@@ -110,6 +110,7 @@
       (update :bal-snelheid-y * -1))))
 
 (defn initialiseer []
+  (q/frame-rate 60)
   (q/smooth)
   (q/no-stroke))
 
@@ -157,4 +158,4 @@
   :setup initialiseer
   :draw cyclus
   :key-pressed toets-ingedrukt
-  :frame-rate 60)
+  :features [:keep-on-top])

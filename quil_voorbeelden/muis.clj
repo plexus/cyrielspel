@@ -12,8 +12,10 @@
     (q/ellipse x y 100 100)))
 
 (q/defsketch muis
-  :size [800 800]
+  :title "Muis en bal"
+  :size [400 400]
   :setup initialiseer
-  :draw teken)
+  :draw teken
+  :features [:keep-on-top])
 
 #_(alter-var-root #'quil.applet/*applet* (constantly lijnkunst))

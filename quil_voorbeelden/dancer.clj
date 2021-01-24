@@ -44,9 +44,10 @@
         (stem x)))))
 
 (q/defsketch dancer
-  :host "host"
-  :size [800 800]
+  :title "Dancer"
+  :size [400 400]
   :setup setup
-  :draw draw)
+  :draw draw
+  :features [:keep-on-top])
 
 (alter-var-root #'quil.applet/*applet* (constantly dancer))

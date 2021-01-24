@@ -59,11 +59,12 @@
         (q/rect x y step step)))))
 
 (q/defsketch dry-paint
-  :host "host"
+  :title "Dry Paint"
   :size [500 500]
   :setup setup
   :update update-state
   :draw draw-state
-  :middleware [m/fun-mode])
+  :middleware [m/fun-mode]
+  :features [:keep-on-top])
 
 (alter-var-root #'quil.applet/*applet* (constantly dry-paint))
