@@ -336,7 +336,7 @@
               (when lb (set! (.-lengthB j) lb)))
             (when (some? ratio) (set! (.-ratio j) ratio))
             j)
-          :revolut
+          :revolute
           (let [j (RevoluteJointDef.)]
             (let [[aa ab] local-anchors]
               (when aa (set! (.-localAnchorA j) (as-vec2 aa)))

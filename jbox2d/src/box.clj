@@ -5,25 +5,43 @@
 (def world (-> (b/world 0 10)
                (b/populate [{:id       :ground
                              :position [3 9]
-                             :fixtures [{:shape [:rect 8 0.4]}]}
+                             :fixtures [{:shape [:rect 16 0.4]}]}
                             {:id       :box
                              :type     :dynamic
                              :bullet?  true
                              :position [0 0]
                              :fixtures [{:shape    [:rect 2 1 #_#_[0 0] 1]
                                          :density  0
-                                         :friction 3}]}
-                            {:id       :circle
+                                         :friction 3
+                                         :restitution 0.8}]}
+                            {:id       :box2
+                             :type     :dynamic
+                             :bullet?  true
+                             :position [1 0]
+                             :fixtures [{:shape    [:rect 1 1 #_#_[0 0] 1]
+                                         :density  0
+                                         :friction 3
+                                         :restitution 0.8}]}
+                            {:id       :triangle
                              :type     :dynamic
                              :position [3 1]
                              :fixtures [{:shape  [:polygon
                                                   [-1 -1]
-                                                  [-1 0.5]
+                                                  [-1 1.5]
                                                   [1 1]]
                                          :density  1
-                                         :friction 3}]}]
-                           #_[{:type   :constant-volume
-                               :bodies [:box :box2 :ground]}])))
+                                         :friction 3
+                                         :restitution 0.8}]}]
+                           [{:type   :distance
+                             :bodies [:box :triangle]
+                             :length 2.5
+                             :frequency 2
+                             :damping 0.5}
+                            {:type   :revolute
+                             :bodies [:box :box2]
+                             :local-anchors [[-1 -1] [0 0]]
+                             :collide-connected? false
+                             }])))
 
 (defn initialiseer []
   (q/stroke-weight 5))
