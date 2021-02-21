@@ -2,18 +2,22 @@
   (:require [quil.core :as q]
             [quil-extras :as e]))
 
-(defn teken []
-  (Thread/sleep 100))
+(do      
+  
+  (defn teken []
+    (Thread/sleep 100))
 
-(q/defsketch mijn-sketch
-  :title "Mijn sketch"
-  :size [400 400]
-  :draw teken
-  :features [:keep-on-top])
+  (q/defsketch mijn-sketch
+    :title "Mijn sketch"
+    :size [1000 600]
+    :draw teken
+    :features [:keep-on-top])
 
-(alter-var-root #'quil.applet/*applet* (constantly mijn-sketch))
+  (alter-var-root #'quil.applet/*applet* (constantly mijn-sketch)))
 
 (e/achtergrond "./rickrolled.jpg")
+
+
 
 ;; Met (q/background ...) kan je de volledige achtergrond een kleur geven.
 ;; Er zijn twee versies:
@@ -46,13 +50,16 @@
 ;; Kleur kiezen : https://www.google.com/search?q=color+picker
 
 ;; Lijnen tekenen
-(q/line 338 42 628 329)
+(q/line 338 42 228 229)
 
 ;; Kies de kleur voor de lijn
 (q/stroke 166 58 43)
+(q/stroke (q/random 255)(q/random 255)(q/random 255))
 
 ;; Kies de dikte van de lijn
-(q/stroke-weight 5)
+(q/stroke-weight 20)
+
+(willekeurige-lijn)
 
 ;; Teken de lijn, (q/line x1 y1 x2 y2)
 (q/line 100 100 400 400)
@@ -65,9 +72,11 @@
 ;; Hoogte van de tekening
 (q/height)
 ;; => 800
+ 
 
 ;; Willekeurig getal tussen 0 en 100
-(q/random 100)
+(Math/round
+ (q/random 100))
 ;; => 14.309019
 
 ;; Willekeurig getal tussen 0 en de breedte van de tekening
@@ -79,10 +88,20 @@
         (q/random (q/width)) (q/random (q/height)))
 
 (defn willekeurige-lijn []
+  (q/stroke (q/random 255) (q/random 255) (q/random 255))
   (q/line (q/random (q/width)) (q/random (q/height))
           (q/random (q/width)) (q/random (q/height))))
 
+
+(defn meerdere-lijnen [n]
+  (dotimes [_ n]
+    (willekeurige-lijn)))
+
 (willekeurige-lijn)
+
+(meerdere-lijnen 999999)
+
+(q/save "cyriel_lijnkunst.jpg")
 
 ;; Willekeurige lijn-kleur
 (q/stroke (q/random 255) (q/random 255) (q/random 255))
@@ -97,7 +116,7 @@
 
 ;; Ellips: x y breedte hoogte
 ;; x y = middelpunt
-(q/ellipse 100 100 300 200)
+(q/ellipse 100 100 900 900)
 (q/ellipse 250 200 300 200)
 
 ;; Zonder lijn, alleen invulling

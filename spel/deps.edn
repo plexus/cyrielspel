@@ -1,0 +1,5 @@
+{:paths ["."]
+ :deps {org.clojure/clojure {:mvn/version "1.10.1"}
+        quil/quil           {:mvn/version "3.1.0"}
+        lambdaisland/cljbox2d {:git/url "https://github.com/plexus/cljbox2d"
+                               :sha "041626ba8309544a56a0a41bb9ecaee8ce96a8ea"}}}

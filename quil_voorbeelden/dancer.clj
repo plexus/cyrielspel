@@ -15,7 +15,7 @@
 (defn t []
   (* 0.001 (q/millis)))
 
-(def speed 1.0) ; <--
+(def speed 2.0) ; <--
 
 (defn stem [base-x]
   (let [magic (/ 8 (q/width))
