@@ -29,7 +29,10 @@
                                        RevoluteJointDef
                                        RopeJointDef
                                        WeldJointDef
-                                       WheelJointDef)))
+                                       WheelJointDef)
+           (org.jbox2d.callbacks RayCastCallback
+                                 ParticleRaycastCallback
+                                 QueryCallback)))
 
 (set! *warn-on-reflection* true)
 (set! *unchecked-math* :warn-on-boxed)
@@ -50,6 +53,7 @@
   (position ^org.jbox2d.common.Vec2 [_])
   (fixture ^Fixture [_])
   (shape ^Shape [_])
+  (centroid [_] "Local position of a shape/fixture inside a body")
   (bodies [_])
   (fixtures [_])
   (joints [_])
@@ -61,7 +65,13 @@
   (move-by! [_ v])
   (zoom! [_ f])
   (draw! [fixture])
-  (draw-shape! [shape body]))
+  (draw-shape! [shape body])
+  (ctl1! [entity k v] "Generically control properties")
+  (alter-user-data! [entity f & args])
+  (apply-force! [_ force] [_ force point])
+  (apply-torque! [_ torque])
+  (apply-impulse! [_ impulse point wake?])
+  (apply-angular-impulse! [_ impulse]))
 
 (defprotocol ICoerce
   (as-vec2 ^org.jbox2d.common.Vec2 [_]))
@@ -187,6 +197,16 @@
 (defmethod make-shape :polygon [[_ & vs]]
   (doto (PolygonShape.)
     (.set (into-array Vec2 (map as-vec2 vs)) (count vs))))
+
+(defmethod make-shape :chain [[_ & vs]]
+  (doto (ChainShape.)
+    (.createChain (into-array Vec2 (map as-vec2 vs))
+                  (count vs))))
+
+(defmethod make-shape :loop [[_ & vs]]
+  (doto (ChainShape.)
+    (.createLoop (into-array Vec2 (map as-vec2 vs))
+                 (count vs))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Body
@@ -464,12 +484,67 @@
      (.getScreenToWorld camera (as-vec2 vec) v)
      v)))
 
+(defn world-point [^Body body vec]
+  (.getWorldPoint body (as-vec2 vec)))
+
 (defn world-vertices
   ([fixture]
    (world-vertices (body fixture) fixture))
   ([^Body body fixture-or-shape]
    (let [vertices (vertices fixture-or-shape)]
-     (map #(.getWorldPoint body %) vertices))))
+     (map (partial world-point body) vertices))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Querying
+
+(defn raycast-callback ^RayCastCallback [f]
+  (if (instance? RayCastCallback f)
+    f
+    (reify RayCastCallback
+      (reportFixture [_ fixture point normal fraction]
+        (f fixture point normal fraction)))))
+
+(defn particle-raycast-callback ^ParticleRaycastCallback [f]
+  (if (instance? ParticleRaycastCallback f)
+    f
+    (reify ParticleRaycastCallback
+      (reportParticle [_ index point normal fraction]
+        (f index point normal fraction)))))
+
+(defn raycast
+  ([^World world rcb point1 point2]
+   (.raycast world
+             (raycast-callback rcb)
+             (as-vec2 point1)
+             (as-vec2 point2)))
+  ([^World world rcb pcb point1 point2]
+   (.raycast world
+             (raycast-callback rcb)
+             (particle-raycast-callback pcb)
+             (as-vec2 point1)
+             (as-vec2 point2))))
+
+(defn particle-raycast [^World world pcb point1 point2]
+  (.raycast world
+            (particle-raycast-callback pcb)
+            (as-vec2 point1)
+            (as-vec2 point2)))
+
+(defn raycast-seq [^World world point1 point2]
+  (let [result (volatile! (transient []))]
+    (raycast world
+             (fn [fixture _ _ _]
+               (vswap! result conj! fixture)
+               1)
+             point1 point2)
+    (persistent! @result)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Properties and Operations
+
+(defn ctl! [entity & kvs]
+  (doseq [[k v] (partition 2 kvs)]
+    (ctl1! entity k v)))
 
 (extend-protocol IProperty
   World
@@ -511,6 +586,27 @@
   PolygonShape
   (vertices [s]
     (into [] (take (.getVertexCount s) (.getVertices s))))
+  (centroid [s]
+    (.m_centroid s))
+
+  CircleShape
+  (vertices [s]
+    [(.m_p s)])
+  (centroid [s]
+    (.m_p s))
+
+  EdgeShape
+  (vertices [s]
+    [(.m_vertex0 s) (.m_vertex1 s)])
+  (centroid [s]
+    (doto ^Vec2 (vec2 0 0)
+      (.addLocal (.m_vertex0 s))
+      (.addLocal (.m_vertex1 s))
+      (.mulLocal 0.5)))
+
+  ChainShape
+  (vertices [s]
+    (.m_vertices s))
 
   OBBViewportTransform
   (position [c]
@@ -524,13 +620,46 @@
   World
   (draw! [w]
     (run! draw! (bodies w)))
+  (ctl1! [w k v]
+    (case k
+      :allow-sleep? (.setAllowSleep w v)
+      :sub-stepping? (.setSubStepping w v)
+      :gravity (.setGravity w (as-vec2 v))
+      :particle-max-count (.setParticleMaxCount w v)
+      :particle-density (.setParticleDensity w v)
+      :particle-gravity-scale (.setParticleGravityScale w v)
+      :particle-dampint (.setParticleDamping w v)
+      :particle-radius (.setParticleRadius w v)))
 
   Body
   (draw! [b]
     (if-let [draw (:draw (user-data b))]
       (draw b)
       (run! draw! (fixtures b))))
-
+  (ctl1! [b k v]
+    (case k
+      :linear-velocity (.setLinearVelocity b (as-vec2 v))
+      :angular-velocity (.setAngularVelocity b v)
+      :transform (.setTransform b (as-vec2 (first v)) (second v))
+      :position (.setTransform b (as-vec2 v) (.getAngle b))
+      :gravity-scale (.setGravityScale b v)
+      :allow-sleep? (.setSleepingAllowed b v)
+      :awake? (.setAwake b v)
+      :active? (.setActive b v)
+      :fixed-rotation? (.setFixedRotation b v)
+      :bullet? (.setBullet b v)))
+  (alter-user-data! [b f & args]
+    (.setUserData b (apply f (.getUserData b) args)))
+  (apply-force! [b force]
+    (.applyForceToCenter b (as-vec2 force)))
+  (apply-force! [b force point]
+    (.applyForce b (as-vec2 force) (as-vec2 point)))
+  (apply-torque! [b torque]
+    (.applyTorque b torque))
+  (apply-impulse! [b impulse point wake?]
+    (.applyLinearImpulse b (as-vec2 impulse) (as-vec2 point) wake?))
+  (apply-angular-impulse! [b impulse]
+    (.applyAngularImpulse b impulse))
 
   OBBViewportTransform
   (move-to! [camera center]
@@ -549,6 +678,8 @@
     (if-let [draw (:draw (user-data fixture))]
       (draw fixture)
       (draw-shape! (shape fixture) (body fixture))))
+  (alter-user-data! [fixt f & args]
+    (.setUserData fixt (apply f (.getUserData fixt) args)))
 
   PolygonShape
   (draw-shape! [shape body]
@@ -562,15 +693,19 @@
 
   CircleShape
   (draw-shape! [shape body]
-    (let [[x y] (world->screen (.-m_p shape))
+    (let [[x y] (world->screen (world-point body (centroid shape)))
           radius (double (.-m_radius shape))
           matrix (.getTransform *camera*)
           [^double scale-x ^double scale-y] (svd/get-scale matrix)]
       #_      (prn [x y radius])
       (q/push-matrix)
       (q/rotate (.getAngle matrix))
-      (q/ellipse x y (* scale-x radius) (* scale-y radius))
-      (q/pop-matrix))))
+      (q/ellipse x y (* scale-x radius 2) (* scale-y radius 2))
+      (q/pop-matrix)))
+
+  Joint
+  (alter-user-data! [j f & args]
+    (.setUserData j (apply f (.getUserData j) args))))
 
 (extend-protocol ICoerce
   Vec2

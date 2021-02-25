@@ -28,6 +28,8 @@
 (q/background 100) ; grijs
 (q/background 255) ; wit
 
+(println "hallo")
+
 ;; Kleur, drie getallen voor rood, groen, blauw
 (q/background 255 0 0) ; 100% rood
 (q/background 0 255 0) ; 100% groen
