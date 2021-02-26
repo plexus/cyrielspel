@@ -1,6 +1,7 @@
 {
   "dependencies": {
     "hammerjs": "^2.0.8",
+    "hxdaedalus-js": "^1.0.1",
     "pixi.js": "^5.3.7",
     "victor": "^1.1.0"
   },

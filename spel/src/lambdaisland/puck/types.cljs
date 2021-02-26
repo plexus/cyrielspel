@@ -7,8 +7,6 @@
             [camel-snake-kebab.core :as csk]
             [lambdaisland.data-printers :as data-printers]))
 
-
-
 (defn lookupify
   "Access object properties via keyword access, and allow destructuring with
   `:keys`"

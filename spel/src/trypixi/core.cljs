@@ -5,7 +5,8 @@
             [clojure.string :as str]
             [lambdaisland.puck :as p]
             [kitchen-async.promise :as promise]
-            [lambdaisland.puck.math :as m])
+            [lambdaisland.puck.math :as m]
+            [lambdaisland.daedalus])
   (:require-macros [lambdaisland.puck.interop :refer [merge!]]))
 
 #_(Hammer. (first (js/document.getElementsByTagName "canvas")))
