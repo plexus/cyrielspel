@@ -226,3 +226,10 @@
   (conj! world (rect 10 12 10 10))
 
   (find-path path 30 30))
+
+
+(.-name (fn [])) ;; => ""
+(.-name (fn hello [])) ;; => "lambdaisland$daedalus$hello"
+
+(str (fn [])) ;; => "function (){\nreturn null;\n}"
+(str (fn hello [])) ;; => "function lambdaisland$daedalus$hello(){\nreturn null;\n}"
