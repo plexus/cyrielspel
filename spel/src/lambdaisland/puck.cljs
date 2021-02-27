@@ -50,25 +50,27 @@
   [app signal callback]
   (.add ^js (j/get (get-in app [:renderer :runners]) signal) (j/lit {signal callback})))
 
-(defn add
-  ([target obj]
-   (.add ^js target obj))
-  ([target obj arg1]
-   (.add ^js target obj arg1))
-  ([target obj arg1 arg2]
-   (.add ^js target obj arg1 arg2)))
+(defn resource [app rname]
+  (j/get (get-in app [:loader :resources]) (if (keyword? rname)
+                                             (name rname)
+                                             name)))
 
-(defn resource [app name]
-  (j/get (get-in app [:loader :resources]) name))
+(defn resource-texture [app rname tname]
+  (j/get (:textures (resource app rname)) tname))
 
-(defn load-resources! [app & urls]
-  (let [^js loader (:loader app)]
+(defn load! [app cb]
+  (.load ^js (:loader app) cb))
+
+(defn load-resources! [app resources]
+  (let [rkeys (keys resources)
+        ^js loader (:loader app)]
     (p/promise [resolve reject]
-      (when-let [missing (seq (remove (partial resource app) urls))]
-        (.add loader (into-array missing)))
+      (when-let [missing (seq (remove #(resource app %) rkeys))]
+        (doseq [k missing]
+          (.add loader (name k) (get resources k))))
       (.load loader
              (fn []
-               (resolve (map (partial resource app) urls)))))))
+               (resolve (into {} (map (juxt identity #(resource app %))) rkeys)))))))
 
 (defn sprite [resource-or-texture]
   (pixi/Sprite. (if-let [texture (:texture resource-or-texture)]

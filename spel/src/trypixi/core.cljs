@@ -1,63 +1,114 @@
 (ns trypixi.core
   (:require ["hammerjs" :as Hammer]
             ["pixi.js" :as pixi]
+            ["@pixi/filter-pixelate" :as pixelate]
+            ["@pixi/filter-crt" :as crt]
             [applied-science.js-interop :as j]
             [clojure.string :as str]
             [lambdaisland.puck :as p]
             [kitchen-async.promise :as promise]
             [lambdaisland.puck.math :as m]
-            [lambdaisland.daedalus])
+            [lambdaisland.daedalus :as daedalus])
   (:require-macros [lambdaisland.puck.interop :refer [merge!]]))
 
 #_(Hammer. (first (js/document.getElementsByTagName "canvas")))
 
+(def state (atom {:speler :jacko
+                  :achtergrond :hut}))
+
 (def world-height 1000)
 
 (defonce ^js app (p/full-screen-app))
+(defonce ^js stage (:stage app))
+(defonce ^js bg-layer (pixi/Container.))
+(defonce ^js sprite-layer (pixi/Container.))
+
+(defonce add-layers-once (conj! stage bg-layer sprite-layer))
+
+(defn screen-size []
+  (get-in app [:renderer :screen]))
+
+(defn screen-to-world-ratio []
+  (let [{:keys [width height]} (screen-size)]
+    (/ height world-height)))
 
 (defn resize-pixi []
-  (let [{:keys [width height]} (get-in app [:renderer :screen])]
-    (merge! app {:stage {:position {:x (/ width 2) :y (/ height 2)}
-                         :scale {:x (/ height world-height)
-                                 :y (/ height world-height)}}})))
+  (let [ratio (screen-to-world-ratio)]
+    (merge! app {:stage {:scale {:x ratio
+                                 :y ratio}}})))
 
 (resize-pixi)
 
 (p/listen! app :resize resize-pixi)
 (p/pixelate!)
 
+(j/assoc! stage
+          :filters
+          #js [(pixelate/PixelateFilter. 5)
+               (crt/CRTFilter. #js {:lineWidth 0.2
+                                    :vignetting 0})
+               (doto (pixi/filters.ColorMatrixFilter.) (.polaroid))])
+
+
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(defonce sprites (atom {}))
+(def spritesheets {:sprites "images/sprites.json"})
 
-(defn sprite
-  ([id]
-   (get @sprites id))
-  ([id texture]
-   (when texture
-     (if-let [sprite (get @sprites id)]
-       sprite
-       (let [sprite (pixi/Sprite. texture)]
-         (swap! sprites assoc id sprite)
-         sprite)))))
+(def images {:jacko          "images/jacko.png"
+             :cliffs         "images/magic-cliffs-preview-detail.png"
+             :fabriek-binnen "images/fabriek_binnen.jpg"
+             :fabriek-buiten "images/fabriek_buiten.jpg"
+             :hut            "images/hut.jpg"
+             :oude-fabriek   "images/oude_fabriek.jpg"
+             :supermarkt     "images/supermarkt.jpg"
+             :werkplaats     "images/werkplaats.jpg"})
 
-(declare sensei)
+(defn make-sprite!
+  ([name texture]
+   (let [sprite (p/sprite texture)]
+     (swap! state assoc-in [:sprites name] sprite)
+     sprite)))
+
+(defn sprite [name]
+  (get-in @state [:sprites name]))
+
+(defn handle-load-sprites [{:keys [sprites]}]
+  (make-sprite! :sensei (p/resource-texture app :sprites "sensei.png"))
+  (println :done-load-sprites))
+
+(defn handle-load-images [images]
+  (doseq [[k img] images]
+    (make-sprite! k img))
+  (println :done-load-images))
+
+(defn draw-background [sprite]
+  (.removeChildren bg-layer)
+  (let [{:keys [width height]} (screen-size)]
+    (merge! sprite {:anchor {:x 0 :y 0}
+                    :scale {:x (/ world-height (:height sprite))
+                            :y (/ world-height (:height sprite))}})
+    (assoc! stage :x (- (/ width (screen-to-world-ratio) 2)
+                        (/ (:width sprite) 2)))
+    (conj! bg-layer sprite)))
+
+(defn teken-scene [{:keys [speler achtergrond]}]
+  (let [speler (sprite speler)
+        achtergrond (sprite achtergrond)]
+    (merge! speler {:x 500
+                    :y 500
+                    :anchor {:x 0.5 :y 0.5}
+                    :scale {:x 0.1 :y 0.1}})
+    (conj! sprite-layer speler)
+    (draw-background achtergrond)))
 
 (defn init! []
-  (promise/let [[sprites bg] (p/load-resources!
-                              app
-                              "images/sprites.json"
-                              "images/magic-cliffs-preview-detail.png")]
-    (let [se (p/sprite (j/get (:textures sprites) "sensei.png"))
-          bg (p/sprite bg)]
-      (set! sensei se)
-      (merge! se {:anchor {:x 0.5 :y 0.5}
-                  :scale {:x 8 :y 8}})
-      (merge! bg {:anchor {:x 0.5 :y 0.5}
-                  :scale {:x (/ world-height (:height bg))
-                          :y (/ world-height (:height bg))}})
-      (conj! (:stage app) bg se))))
+  (promise/do
+    (promise/then (p/load-resources! app spritesheets) handle-load-sprites)
+    (promise/then (p/load-resources! app images) handle-load-images)
+    (teken-scene @state)))
 
+(sprite (:achtergrond @state))
 ;; (defonce display (text "hello"))
 
 ;; (j/assoc-in! display [:style :fill] "white")
@@ -67,7 +118,7 @@
 
 (defn touch-start [e]
   (let [touch (first (:touches e))]
-    (j/assoc! sensei :destination
+    (j/assoc! (sprite :sensei) :destination
               (.applyInverse (get-in app [:stage :transform :worldTransform])
                              (m/point (:clientX touch) (:clientY touch))))))
 
@@ -78,7 +129,8 @@
 
 (defn game-loop [delta]
   (try
-    (let [{:keys [destination position]} sensei]
+    (let [
+          {:keys [destination position]} (sprite :sensei)]
       (when destination
         (when (< 5 (m/distance position destination))
           (let [diff (m/v- destination position)
@@ -89,4 +141,4 @@
       (prn "game-loop error" e))))
 
 (defonce game-loop-once
-  (p/add (:ticker app) (fn [d] (game-loop d))))
+  (conj! (:ticker app) (fn [d] (game-loop d))))

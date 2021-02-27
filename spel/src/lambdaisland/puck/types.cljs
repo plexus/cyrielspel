@@ -17,7 +17,25 @@
       ([this k]
        (j/get this k))
       ([this k not-found]
-       (j/get this k not-found)))))
+       (j/get this k not-found)))
+    ITransientAssociative
+    (-assoc! [this k v]
+      (j/assoc! this k v)
+      this)))
+
+(defn addify [type]
+  (extend-type type
+    ITransientCollection
+    (-conj! [^js this v]
+      (.add this v)
+      this)))
+
+(defn add-childify [type]
+  (extend-type type
+    ITransientCollection
+    (-conj! [^js this v]
+      (.addChild this v)
+      this)))
 
 (defn register-printer [type tag to-edn]
   (data-printers/register-print type tag to-edn)
@@ -57,10 +75,13 @@
 
 (register-keys-printer pixi/Ticker 'pixi/Ticker [:deltaTime :deltaMS :elapsedMS :lastTime :speed :started])
 
-(extend-protocol ITransientCollection
-  pixi/Container
-  (-conj! [this obj]
-    (.addChild ^js this obj)))
+(add-childify pixi/Container)
+(addify pixi/Ticker)
+
+(extend-type pixi/Loader
+  ITransientCollection
+  (-conj! [^js this [k v]]
+    (.add this k v)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; DOM / browser types
