@@ -139,6 +139,8 @@
           (prn sprite))))))
 
 (comment
+  (split-img! "/tmp/minispel/tekening.png"
+              "/tmp/minispel/sprite_")
   (split-img! "/home/arne/GameAssets/tavern inn by CBL/sprites/tilableFloorsAndWalls.png"
               "/home/arne/GameAssets/tavern inn by CBL/individual/floors_walls_")
   (split-img! "/home/arne/GameAssets/tavern inn by CBL/sprites/originalIndoorSprites.png"

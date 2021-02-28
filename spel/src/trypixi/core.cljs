@@ -11,19 +11,42 @@
             [lambdaisland.daedalus :as daedalus])
   (:require-macros [lambdaisland.puck.interop :refer [merge!]]))
 
-#_(Hammer. (first (js/document.getElementsByTagName "canvas")))
+(def spritesheets {:sprites "images/sprites.json"
+                   :minispel "images/minispel/minispel.json"})
+
+(def images {:jacko             "images/jacko.png"
+             :cliffs            "images/magic-cliffs-preview-detail.png"
+             :fabriek-binnen    "images/fabriek_binnen.jpg"
+             :fabriek-buiten    "images/fabriek_buiten.jpg"
+             :hut               "images/hut.jpg"
+             :oude-fabriek      "images/oude_fabriek.jpg"
+             :supermarkt        "images/supermarkt.jpg"
+             :werkplaats        "images/werkplaats.jpg"
+             :bulkhead-back     "images/bulkhead-walls-back.png"
+             :bulkhead-pipes    "images/bulkhead-walls-pipes.png"
+             :bulkhead-platform "images/bulkhead-walls-platform.png"})
 
 (def state (atom {:speler :jacko
                   :achtergrond :hut}))
 
 (def world-height 1000)
+(def achtergrond-kleur 0xFFFFFF)
 
-(defonce ^js app (p/full-screen-app))
+(defonce ^js app (p/full-screen-app {:background-color "white"}))
 (defonce ^js stage (:stage app))
+(defonce ^js world (pixi/Container.))
+(defonce ^js fill-layer (pixi/Container.))
 (defonce ^js bg-layer (pixi/Container.))
 (defonce ^js sprite-layer (pixi/Container.))
+(defonce ^js renderer (:renderer app))
 
-(defonce add-layers-once (conj! stage bg-layer sprite-layer))
+(defonce ^js graphics (pixi/Graphics.))
+
+(defonce add-layers-once
+  (do
+    (conj! stage fill-layer world)
+    (conj! fill-layer graphics)
+    (conj! world bg-layer sprite-layer)))
 
 (defn screen-size []
   (get-in app [:renderer :screen]))
@@ -32,37 +55,19 @@
   (let [{:keys [width height]} (screen-size)]
     (/ height world-height)))
 
+(defn visible-world-width []
+  (/ (:width (screen-size)) (screen-to-world-ratio)))
+
 (defn resize-pixi []
   (let [ratio (screen-to-world-ratio)]
-    (merge! app {:stage {:scale {:x ratio
-                                 :y ratio}}})))
-
-(resize-pixi)
-
-(p/listen! app :resize resize-pixi)
-(p/pixelate!)
-
-(j/assoc! stage
-          :filters
-          #js [(pixelate/PixelateFilter. 5)
-               (crt/CRTFilter. #js {:lineWidth 0.2
-                                    :vignetting 0})
-               (doto (pixi/filters.ColorMatrixFilter.) (.polaroid))])
-
-
+    (merge! world {:scale {:x ratio
+                           :y ratio}}))
+  (.beginFill graphics achtergrond-kleur)
+  (let [{:keys [width height]} (screen-size)]
+    (.drawRect graphics 0 0 width height))
+  (.endFill graphics))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(def spritesheets {:sprites "images/sprites.json"})
-
-(def images {:jacko          "images/jacko.png"
-             :cliffs         "images/magic-cliffs-preview-detail.png"
-             :fabriek-binnen "images/fabriek_binnen.jpg"
-             :fabriek-buiten "images/fabriek_buiten.jpg"
-             :hut            "images/hut.jpg"
-             :oude-fabriek   "images/oude_fabriek.jpg"
-             :supermarkt     "images/supermarkt.jpg"
-             :werkplaats     "images/werkplaats.jpg"})
 
 (defn make-sprite!
   ([name texture]
@@ -102,30 +107,11 @@
     (conj! sprite-layer speler)
     (draw-background achtergrond)))
 
-(defn init! []
-  (promise/do
-    (promise/then (p/load-resources! app spritesheets) handle-load-sprites)
-    (promise/then (p/load-resources! app images) handle-load-images)
-    (teken-scene @state)))
-
-(sprite (:achtergrond @state))
-;; (defonce display (text "hello"))
-
-;; (j/assoc-in! display [:style :fill] "white")
-;; (j/assoc! display :x 10 :y 100)
-
-(defonce init-once (init!))
-
 (defn touch-start [e]
   (let [touch (first (:touches e))]
     (j/assoc! (sprite :sensei) :destination
               (.applyInverse (get-in app [:stage :transform :worldTransform])
                              (m/point (:clientX touch) (:clientY touch))))))
-
-(defonce touch-start-once
-  (.addEventListener (get-in app [:renderer :view])
-                     "touchstart"
-                     (fn [e] (touch-start e))))
 
 (defn game-loop [delta]
   (try
@@ -140,5 +126,68 @@
     (catch :default e
       (prn "game-loop error" e))))
 
-(defonce game-loop-once
-  (conj! (:ticker app) (fn [d] (game-loop d))))
+(j/assoc! stage
+          :filters
+          #js [#_(doto (pixi/filters.ColorMatrixFilter.) (.polaroid))
+               #_(pixelate/PixelateFilter. 5)
+               #_(crt/CRTFilter. #js {:lineWidth 0.2
+                                      :vignetting 0})])
+(declare minispel-init)
+
+(defn init! []
+  (resize-pixi)
+  (p/listen! app :resize resize-pixi)
+  (p/pixelate!)
+
+  (promise/do
+    (promise/then (p/load-resources! app spritesheets) handle-load-sprites)
+    (promise/then (p/load-resources! app images) handle-load-images)
+    #_(teken-scene @state)
+
+    (.addEventListener (get-in app [:renderer :view])
+                       "touchstart"
+                       (fn [e] (touch-start e)))
+
+    (conj! (:ticker app) (fn [d] (game-loop d)))
+    (minispel-init)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Minispel 1
+
+(defn minispel-sprites-maken []
+  )
+
+(defn minispel-init []
+  (.removeChildren sprite-layer)
+  (.removeChildren bg-layer)
+  (doseq [k [:ruimteschip :virus :loding :batterij
+             :pijl-links :pijl-rechts :pijl-schiet]]
+    (make-sprite! k (p/resource-texture app :minispel (str (name k) ".png"))))
+
+  (let [schip (sprite :ruimteschip)
+        links (sprite :pijl-links)
+        rechts (sprite :pijl-rechts)
+        schiet (sprite :pijl-schiet)]
+
+    (conj! sprite-layer schip links rechts schiet)
+
+    (merge! schip {:x (/ (visible-world-width) 2)
+                   :y 700})
+
+    (merge! links {:x 100
+                   :y 900
+                   :interactive true})
+    (merge! rechts {:x 250
+                    :y 900
+                    :interactive true})
+    (merge! schiet {:x (- (visible-world-width) 200)
+                    :y 850
+                    :interactive true})))
+
+
+
+(defonce init-once (init!))
+
+(minispel-init)
+
+#_(Hammer. (first (js/document.getElementsByTagName "canvas")))

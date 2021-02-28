@@ -67,6 +67,7 @@
     (p/promise [resolve reject]
       (when-let [missing (seq (remove #(resource app %) rkeys))]
         (doseq [k missing]
+          (prn k)
           (.add loader (name k) (get resources k))))
       (.load loader
              (fn []
