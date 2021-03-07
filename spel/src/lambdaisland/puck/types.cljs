@@ -21,13 +21,10 @@
     ITransientAssociative
     (-assoc! [this k v]
       (j/assoc! this k v)
-      this)))
-
-(defn addify [type]
-  (extend-type type
-    ITransientCollection
-    (-conj! [^js this v]
-      (.add this v)
+      this)
+    ITransientMap
+    (-dissoc! [this k]
+      (js-delete this k)
       this)))
 
 (defn add-childify [type]
@@ -35,7 +32,10 @@
     ITransientCollection
     (-conj! [^js this v]
       (.addChild this v)
-      this)))
+      this)
+    ITransientSet
+    (-disjoin! [^js this v]
+      (.removeChild this v))))
 
 (defn register-printer [type tag to-edn]
   (data-printers/register-print type tag to-edn)
@@ -76,12 +76,15 @@
 (register-keys-printer pixi/Ticker 'pixi/Ticker [:deltaTime :deltaMS :elapsedMS :lastTime :speed :started])
 
 (add-childify pixi/Container)
-(addify pixi/Ticker)
 
 (extend-type pixi/Loader
   ITransientCollection
   (-conj! [^js this [k v]]
     (.add this k v)))
+
+(register-keys-printer pixi/InteractionEvent 'pixi/InteractionEvent [:type :target :stopped :stopsPropagationAt :stopPropagationHint :currentTarget :date])
+
+(register-keys-printer pixi/InteractionData 'pixi/InteractionData [:global :target :originalEvent :identifier :isPrimary :button :buttons :width :height :tiltX :tiltY :pointerType :pressure :rotationAngle :twist :tangentialPressure])
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; DOM / browser types
@@ -117,3 +120,14 @@
   (register-keys-printer js/TouchEvent 'js/TouchEvent [:altKey :changedTouches :ctrlKey :metaKey :shiftKey :targetTouches :touches])
   (register-keys-printer js/Touch 'js/Touch [:identifier :screenX :screenY :clientX :clientY :pageX :pageY :target])
   (register-printer js/TouchList 'js/TouchList (comp vec seq)))
+
+(register-keys-printer js/PointerEvent 'js/PointerEvent [:pointerId :width :height :pressure :tangentialPressure :tiltX :tiltY :twist :pointerType :isPrimary])
+
+(def mouse-event-keys [:altKey :button :buttons :clientX :clientY :ctrlKey :metaKey :movementX :movementY
+                       ;; "These are experimental APIs that should not be used in production code" -- MDN
+                       ;; :offsetX :offsetY :pageX :pageY
+                       :region :relatedTarget :screenX :screenY :shiftKey])
+
+(register-keys-printer js/MouseEvent 'js/MouseEvent mouse-event-keys)
+(register-keys-printer js/WheelEvent 'js/WheelEvent (conj mouse-event-keys :deltaX :deltaY :deltaZ :deltaMode))
+(register-keys-printer js/DragEvent 'js/DragEvent (conj mouse-event-keys :dataTransfer))

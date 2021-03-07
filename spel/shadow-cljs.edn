@@ -7,9 +7,10 @@
  :builds
  {:main
   {:target     :browser
-   :modules    {:main {:entries [trypixi.core]}}
+   :modules    {:main {:entries [spel.spel]}}
    :output-dir "resources/public/ui"
    :asset-path "/ui"
    :devtools   {:infer-externs :auto
                 :repl-pprint true
-                :warnings-as-errors #{:undeclared-var}}}}}
+                :warnings-as-errors #{:undeclared-var}
+                :after-load spel.spel/on-hot-reload}}}}
