@@ -184,7 +184,7 @@
                     :y 850
                     :interactive true})))
 
-
+pixi/interaction
 
 (defonce init-once (init!))
 
