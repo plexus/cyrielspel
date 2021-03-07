@@ -227,6 +227,36 @@
                 <key>scale9FromFile</key>
                 <false/>
             </struct>
+            <key type="filename">kogel virus.png</key>
+            <struct type="IndividualSpriteSettings">
+                <key>pivotPoint</key>
+                <point_f>0,0</point_f>
+                <key>spriteScale</key>
+                <double>1</double>
+                <key>scale9Enabled</key>
+                <false/>
+                <key>scale9Borders</key>
+                <rect>11,34,23,67</rect>
+                <key>scale9Paddings</key>
+                <rect>11,34,23,67</rect>
+                <key>scale9FromFile</key>
+                <false/>
+            </struct>
+            <key type="filename">kogel.png</key>
+            <struct type="IndividualSpriteSettings">
+                <key>pivotPoint</key>
+                <point_f>0,0</point_f>
+                <key>spriteScale</key>
+                <double>1</double>
+                <key>scale9Enabled</key>
+                <false/>
+                <key>scale9Borders</key>
+                <rect>11,15,23,30</rect>
+                <key>scale9Paddings</key>
+                <rect>11,15,23,30</rect>
+                <key>scale9FromFile</key>
+                <false/>
+            </struct>
             <key type="filename">loding.png</key>
             <struct type="IndividualSpriteSettings">
                 <key>pivotPoint</key>
@@ -348,6 +378,8 @@
             <filename>sprite__181_15_315x225.png</filename>
             <filename>sprite__540_270_105x105.png</filename>
             <filename>virus.png</filename>
+            <filename>kogel.png</filename>
+            <filename>kogel virus.png</filename>
         </array>
         <key>ignoreFileList</key>
         <array/>
