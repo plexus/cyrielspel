@@ -6,10 +6,18 @@
             [applied-science.js-interop :as j]
             [kitchen-async.promise :as p]
             [lambdaisland.puck.types]
-            [camel-snake-kebab.core :as csk]))
+            [camel-snake-kebab.core :as csk]
+            [lambdaisland.puck.util :as util])
+  (:require-macros [lambdaisland.puck :refer [merge!]]))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Helpers
 
 (defn opts->js [m]
   (clj->js m :keyword-fn csk/->camelCaseString))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Initialization
 
 (defn application ^js [pixi-opts]
   (pixi/Application. (opts->js pixi-opts)))
@@ -33,12 +41,18 @@
                               "WebGL"
                               "canvas")))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Settings
+
 (defn pixelate!
   "Tell pixi to not blur when scaling."
   []
   (j/assoc-in! pixi/settings [:SCALE_MODE] pixi/SCALE_MODES.NEAREST))
 
-(def listeners (atom {}))
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Event / callback handling
+
+(defonce listeners (atom {}))
 
 (defprotocol EventSource
   (-listen! [source type key callback])
@@ -150,7 +164,22 @@
   (-unlisten! [loader signal key]
     (when-let [binding (j/get-in loader [:__listeners (key-str signal) (key-str key)])]
       (js-delete (j/get-in loader [:__listeners (key-str signal)]) (key-str key))
-      (.detach ^js binding))))
+      (.detach ^js binding)))
+
+  ;; Also implement listen! / unlisten! for js/window, so you can use it e.g.
+  ;; for global keyboard events.
+  js/Window
+  (-listen! [win sig key cb]
+    (-unlisten! win sig key)
+    (j/assoc-in! win [:__listeners (key-str key)] cb)
+    (.addEventListener win (key-str sig) cb))
+  (-unlisten! [win sig key]
+    (when-let [listener (j/get-in win [:__listeners (key-str sig) (key-str key)])]
+      (js-delete (j/get-in win [:__listeners (key-str sig)]) (key-str key))
+      (.removeEventListener js/window sig listener))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Resources / Textures / Resource loading
 
 (defn resource
   "Gets a resource from the app's resource loader by name, only does a simple key
@@ -179,16 +208,8 @@
              (fn []
                (resolve (into {} (map (juxt identity #(resource app %))) rkeys)))))))
 
-(defn sprite
-  "Turn a resource or texture into a sprite"
-  [resource-or-texture]
-  (pixi/Sprite. (if-let [texture (:texture resource-or-texture)]
-                  texture
-                  resource-or-texture)))
-
-(defn text
-  ([msg] (pixi/Text. msg))
-  ([msg style] (pixi/Text. msg style)))
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Geometry
 
 (defn local-bounds
   "Retrieves the local bounds of the displayObject or container as a rectangle object.
@@ -207,3 +228,52 @@
   "Create a new pixi/Rectangle"
   [x y w h]
   (pixi/Rectangle. x y w h))
+
+(defn rect-overlap?
+  "Do the AABB boxes of the two display objects overlap/touch. Useful for
+  rudimentary collision detection."
+  [a b]
+  (let [ab (.getBounds ^js a)
+        bb (.getBounds ^js b)]
+    (and (< (:x bb) (+ (:x ab) (:width ab)))
+         (< (:x ab) (+ (:x bb) (:width bb)))
+         (< (:y bb) (+ (:y ab) (:height ab)))
+         (< (:y ab) (+ (:y bb) (:height bb))))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Display objects
+
+(defn sprite
+  "Turn a resource or texture into a sprite"
+  [resource-or-texture]
+  (pixi/Sprite. (if-let [texture (:texture resource-or-texture)]
+                  texture
+                  resource-or-texture)))
+
+(defn text
+  "Create a text display object with a given message and, optionally, style."
+  ([msg] (pixi/Text. msg))
+  ([msg style] (pixi/Text. msg style)))
+
+(defn container
+  "Create a container and populate it"
+  [opts & children]
+  (let [c (pixi/Container.)]
+    (merge! c opts)
+    (apply conj! c children)
+    c))
+
+(defn graphics
+  "Create a new Graphics drawing context"
+  ([]
+   (pixi/Graphics.))
+  ([geometry]
+   (pixi/Graphics. geometry)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Operations
+
+(defn remove-children
+  "Remove all children from a container"
+  [^js container]
+  (.removeChildren container))

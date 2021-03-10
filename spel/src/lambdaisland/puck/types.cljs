@@ -27,20 +27,9 @@
       (js-delete this k)
       this)))
 
-(defn add-childify [type]
-  (extend-type type
-    ITransientCollection
-    (-conj! [^js this v]
-      (.addChild this v)
-      this)
-    ITransientSet
-    (-disjoin! [^js this v]
-      (.removeChild this v))))
-
 (defn register-printer [type tag to-edn]
   (data-printers/register-print type tag to-edn)
-  (data-printers/register-pprint type tag to-edn)
-  (lookupify type))
+  (data-printers/register-pprint type tag to-edn))
 
 (defn register-keys-printer [type tag keys]
   (register-printer type tag (fn [obj]
@@ -75,7 +64,38 @@
 
 (register-keys-printer pixi/Ticker 'pixi/Ticker [:deltaTime :deltaMS :elapsedMS :lastTime :speed :started])
 
-(add-childify pixi/Container)
+
+(extend-type pixi/Container
+  ;; Lookup by keyword for js obj attributes, but also lookup display objects as
+  ;; if it's a set, so you can use `contains?`
+  ILookup
+  (-lookup
+    ([this k]
+     (if (keyword? k)
+       (j/get this k)
+       (when (= -1 (.indexOf (.-children this) k))
+         k)))
+    ([this k not-found]
+     (if (keyword? k)
+       (j/get this k)
+       (if (not= -1 (.indexOf (.-children this) k))
+         k
+         not-found))))
+  ITransientAssociative
+  (-assoc! [this k v]
+    (j/assoc! this k v)
+    this)
+  ITransientMap
+  (-dissoc! [this k]
+    (js-delete this k)
+    this)
+  ITransientCollection
+  (-conj! [^js this v]
+    (.addChild this v)
+    this)
+  ITransientSet
+  (-disjoin! [^js this v]
+    (.removeChild this v)))
 
 (extend-type pixi/Loader
   ITransientCollection
@@ -114,14 +134,22 @@
 
 (register-printer js/Location 'js/Location str)
 
-(def has-touch-event? (exists? js/TouchEvent))
 
-(when has-touch-event?
+
+(when (exists? js/KeyboardEvent)
+  (register-keys-printer js/KeyboardEvent 'js/KeyboardEvent [:type :code :key :ctrlKey :altKey :metaKey :shiftKey :isComposing :location :repeat]))
+
+(when (exists? js/TouchEvent)
   (register-keys-printer js/TouchEvent 'js/TouchEvent [:altKey :changedTouches :ctrlKey :metaKey :shiftKey :targetTouches :touches])
   (register-keys-printer js/Touch 'js/Touch [:identifier :screenX :screenY :clientX :clientY :pageX :pageY :target])
-  (register-printer js/TouchList 'js/TouchList (comp vec seq)))
+  (register-printer js/TouchList 'js/TouchList (comp vec seq))
+  (lookupify js/TouchEvent)
+  (lookupify js/Touch)
+  (lookupify js/TouchList))
 
-(register-keys-printer js/PointerEvent 'js/PointerEvent [:pointerId :width :height :pressure :tangentialPressure :tiltX :tiltY :twist :pointerType :isPrimary])
+(register-keys-printer js/PointerEvent 'js/PointerEvent [:pointerId :width :height :pressure
+                                                         :tangentialPressure :tiltX :tiltY
+                                                         :twist :pointerType :isPrimary])
 
 (def mouse-event-keys [:altKey :button :buttons :clientX :clientY :ctrlKey :metaKey :movementX :movementY
                        ;; "These are experimental APIs that should not be used in production code" -- MDN
@@ -131,3 +159,10 @@
 (register-keys-printer js/MouseEvent 'js/MouseEvent mouse-event-keys)
 (register-keys-printer js/WheelEvent 'js/WheelEvent (conj mouse-event-keys :deltaX :deltaY :deltaZ :deltaMode))
 (register-keys-printer js/DragEvent 'js/DragEvent (conj mouse-event-keys :dataTransfer))
+
+(doseq [t [pixi/Application pixi/Renderer pixi/Loader pixi/resources.Resource pixi/Point pixi/ObservablePoint
+           pixi/Matrix pixi/Transform #_pixi/Container pixi/Sprite pixi/Texture pixi/BaseTexture pixi/Rectangle
+           resource-loader/Resource pixi/resources.Resource pixi/resources.ImageResource pixi/Ticker
+           pixi/InteractionEvent pixi/InteractionData js/Window js/PointerEvent
+           js/MouseEvent js/WheelEvent js/DragEvent]]
+  (lookupify t))

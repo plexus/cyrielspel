@@ -11,8 +11,7 @@
             [lambdaisland.puck.math :as m]
             [lambdaisland.daedalus :as daedalus]
             [lambdaisland.glogi.console :as glogi-console]
-            [lambdaisland.glogi :as log])
-  (:require-macros [lambdaisland.puck.interop :refer [merge!]]))
+            [lambdaisland.glogi :as log]))
 
 (defonce state (atom {:scene nil
                       :time 0
@@ -24,7 +23,6 @@
 
 (glogi-console/install!)
 (log/set-levels {:glogi/root :all})
-
 
 (def images {:jacko             "images/jacko.png"
              :cliffs            "images/magic-cliffs-preview-detail.png"
@@ -41,21 +39,19 @@
 (def world-height 1000)
 (def achtergrond-kleur 0xFFFFFF)
 
-(defonce ^js app (p/full-screen-app {:background-color "white"}))
-(defonce ^js stage (:stage app))
-(defonce ^js world (pixi/Container.))
-(defonce ^js fill-layer (pixi/Container.))
-(defonce ^js bg-layer (pixi/Container.))
-(defonce ^js sprite-layer (pixi/Container.))
-(defonce ^js renderer (:renderer app))
+(defonce app (p/full-screen-app {:background-color "white"}))
+(defonce stage (:stage app))
+(defonce renderer (:renderer app))
 
-(defonce ^js graphics (pixi/Graphics.))
+(defonce graphics (p/graphics))
 
-(defonce add-layers-once
-  (do
-    (conj! stage fill-layer world)
-    (conj! fill-layer graphics)
-    (conj! world bg-layer sprite-layer)))
+(defonce bg-layer (p/container {}))
+(defonce sprite-layer (p/container {}))
+(defonce world (p/container {} bg-layer sprite-layer))
+
+(defonce fill-layer (p/container {} graphics))
+
+(defonce add-layers-once (conj! stage fill-layer world))
 
 ;; stage
 ;; |- fill
@@ -66,11 +62,10 @@
 ;;       |- ruimteschip
 
 (j/assoc! stage :filters
-          #js [#_(doto (pixi/filters.ColorMatrixFilter.) (.polaroid))
+          #js [(doto (pixi/filters.ColorMatrixFilter.) (.polaroid))
                #_(pixelate/PixelateFilter. 5)
-               #_(crt/CRTFilter. #js {:lineWidth 0.2
-                                      :vignetting 0})])
-
+               (crt/CRTFilter. #js {:lineWidth 0.2
+                                    :vignetting 0})])
 
 (defmulti load-scene :scene)
 (defmulti start-scene :scene)
@@ -121,7 +116,7 @@
 (defn resize-pixi []
   (let [{:keys [width height]} (screen-size)]
     (let [ratio (screen-to-world-ratio)]
-      (merge! world {:x (/ width 2)
+      (p/merge! world {:x (/ width 2)
                      :scale {:x ratio
                              :y ratio}}))
     (.beginFill graphics achtergrond-kleur)
@@ -161,7 +156,7 @@
 (defn draw-background [sprite]
   (.removeChildren bg-layer)
   (let [{:keys [width height]} (screen-size)]
-    (merge! sprite {:anchor {:x 0 :y 0}
+    (p/merge! sprite {:anchor {:x 0 :y 0}
                     :scale {:x (/ world-height (:height sprite))
                             :y (/ world-height (:height sprite))}})
     (assoc! stage :x (- (/ width (screen-to-world-ratio) 2)
@@ -179,7 +174,7 @@
 (defmethod start-scene :sensei [{}]
   (let [speler (sprite :sensei)
         achtergrond (sprite :cliffs)]
-    (merge! speler {:x 500
+    (p/merge! speler {:x 500
                     :y 500
                     :anchor {:x 0.5 :y 0.5}
                     :scale {:x 0.1 :y 0.1}})
@@ -216,11 +211,29 @@
     (doseq [k [:ruimteschip :loding :batterij :kogel
                :pijl-links :pijl-rechts :pijl-schiet]]
       (doto (make-sprite! k (j/get (:textures minispel) (str (name k) ".png")))
-        (merge! {:anchor {:x 0.5 :y 0.5}})))
+        (p/merge! {:anchor {:x 0.5 :y 0.5}})))
+    (p/merge! (sprite :ruimteschip) {:scale {:x 0.5 :y 0.5}})
     (doseq [x (range 8)
             y (range 3)]
-      (doto (make-sprite! [:virus x y] (j/get (:textures minispel) "virus.png"))
-        (merge! {:anchor {:x 0.5 :y 0.5}})))))
+      (let [sprite (make-sprite! [:virus x y] (j/get (:textures minispel) "virus.png"))
+            scale (+ 0.7 (* 0.2 (rand)))]
+        (p/merge! sprite {:anchor {:x 0.5 :y 0.5} :scale {:x scale :y scale}})))))
+
+(defn schiet-kogel! []
+  (let [schip (sprite :ruimteschip)
+        kogel (sprite :kogel)]
+    (when (or (not (contains? sprite-layer kogel)) (<= (:y kogel) 0))
+      (p/merge! kogel (doto {:x (:x schip)
+                             :y (- (:y schip) 110)
+                             :vy -10
+                             :visible true} prn))
+      (conj! sprite-layer kogel))))
+
+(defn key-event->keyword [e]
+  (let [k (.-key e)]
+    (case k
+      " " :Space
+      (keyword k))))
 
 (defmethod start-scene :space-invaders [_]
   (let [schip (sprite :ruimteschip)
@@ -228,74 +241,64 @@
         rechts (sprite :pijl-rechts)
         schiet (sprite :pijl-schiet)
         kogel (sprite :kogel)
-        virussen (pixi/Container.)]
+        virussen (p/container {})
+        ga-links! #(j/assoc! schip :vx -10)
+        ga-rechts! #(j/assoc! schip :vx 10)]
 
     (doseq [sprite [links rechts schiet]]
       (j/assoc! sprite :interactive true)
       (pad-hit-area! sprite 50 50))
 
     (doseq [e [:touchstart :mousedown]]
-      (p/listen! links e #(j/assoc! schip :vx -10))
-      (p/listen! rechts e #(j/assoc! schip :vx 10))
-      (p/listen! schiet e (fn []
-                            (merge! kogel {:x (:x schip)
-                                           :y (- (:y schip) 110)
-                                           :vy -10
-                                           :visible true})
-                            (conj! sprite-layer kogel))))
+      (p/listen! links e ga-links!)
+      (p/listen! rechts e ga-rechts!)
+      (p/listen! schiet e schiet-kogel!))
+
+    (p/listen! js/window :keydown #(scene-swap! update :keys (fnil conj #{}) (key-event->keyword %)))
+    (p/listen! js/window :keyup #(scene-swap! update :keys disj (keyword (key-event->keyword %))))
 
     (doseq [e [:touchend :mouseup]]
       (p/listen! links e #(j/assoc! schip :vx 0))
       (p/listen! rechts e #(j/assoc! schip :vx 0)))
 
-    (merge! virussen {:x 0
-                      :vx 2})
+    (p/merge! virussen {:x 0 :vx 2})
 
     (scene-swap! assoc :virussen virussen)
 
     (doseq [x (range 8)
             y (range 3)
             :let [sprite (sprite [:virus x y])]]
-      (merge! sprite {:x (+ -400 (* 100 x))
+      (p/merge! sprite {:x (+ -400 (* 100 x))
                       :y (+ 100 (* 100 y))})
       (conj! virussen sprite))
 
     (conj! sprite-layer virussen schip links rechts schiet)
 
-    (merge! schip {:x 0
-                   :y 800})
+    (p/merge! schip {:x 0 :y 850})
 
-    (merge! links {:x -650
-                   :y 900
-                   :interactive true})
-    (merge! rechts {:x -500
-                    :y 900
-                    :interactive true})
-    (merge! schiet {:x 550
-                    :y 900
-                    :interactive true})))
+    (p/merge! links {:x -650 :y 930 :interactive true})
+    (p/merge! rechts {:x -500 :y 930 :interactive true})
+    (p/merge! schiet {:x 550 :y 900 :interactive true})))
 
 (defmethod stop-scene :space-invaders [_]
-  (.removeChildren sprite-layer)
-  (.removeChildren bg-layer))
+  (p/remove-children sprite-layer)
+  (p/remove-children bg-layer))
 
 (defn move-sprite [sprite delta]
   (j/update! sprite :x + (* (j/get sprite :vx 0) delta))
   (j/update! sprite :y + (* (j/get sprite :vy 0) delta)))
 
-(def bump (Bump.))
-(defn collission? [a b]
-  #_(.hitTestRectangle bump a b)
-
-  (let [ab (.getBounds ^js a)
-        bb (.getBounds ^js b)]
-    (and (< (:x bb) (+ (:x ab) (:width ab)))
-         (< (:x ab) (+ (:x bb) (:width bb)))
-         (< (:y bb) (+ (:y ab) (:height ab)))
-         (< (:y ab) (+ (:y bb) (:height bb))))))
-
-(defmethod tick-scene :space-invaders [{:keys [delta virussen]}]
+(defmethod tick-scene :space-invaders [{:keys [delta virussen keys]}]
   (move-sprite virussen delta)
+
+  (prn keys)
+
+  (when (:ArrowLeft keys)
+    (j/update! (sprite :ruimteschip) :x - 10))
+  (when (:ArrowRight keys)
+    (j/update! (sprite :ruimteschip) :x + 10))
+  (when (:Space keys)
+    (schiet-kogel!))
 
   (when (or (< (:x virussen) -400)
             (< 400 (:x virussen)))
@@ -310,8 +313,8 @@
     (doseq [x (range 8)
             y (range 3)
             :let [virus (sprite [:virus x y])]]
-      (when (and (:visible kogel) (collission? kogel virus))
-        (merge! kogel {:visible false})
+      (when (and (:visible kogel) (p/rect-overlap? kogel virus))
+        (p/merge! kogel {:visible false})
         (disj! sprite-layer kogel)
         (disj! virussen virus)))))
 
