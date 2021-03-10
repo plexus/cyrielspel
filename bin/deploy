@@ -1,0 +1,20 @@
+#!/bin/env bash
+
+set -ex
+
+SPEL_HOME="$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." >/dev/null 2>&1 && pwd )"
+
+pushd $SPEL_HOME/spel
+git clean -xfd resources/public
+npx shadow-cljs release main
+git add -Af resources/public
+git commit -m 'Deploy'
+
+pushd $SPEL_HOME
+git branch -D gh-pages || true
+git subtree split --branch gh-pages --prefix spel/resources/public
+git push origin -f gh-pages:gh-pages
+git reset 'HEAD~1'
+popd
+
+popd
