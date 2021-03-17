@@ -166,8 +166,18 @@
       (js-delete (j/get-in loader [:__listeners (key-str signal)]) (key-str key))
       (.detach ^js binding)))
 
-  ;; Also implement listen! / unlisten! for js/window, so you can use it e.g.
+  ;; Also implement listen! / unlisten! for dom elements, so you can use it e.g.
   ;; for global keyboard events.
+  js/Element
+  (-listen! [el sig key cb]
+    (-unlisten! el sig key)
+    (j/assoc-in! el [:__listeners (key-str key)] cb)
+    (.addEventListener el (key-str sig) cb))
+  (-unlisten! [el sig key]
+    (when-let [listener (j/get-in el [:__listeners (key-str sig) (key-str key)])]
+      (js-delete (j/get-in el [:__listeners (key-str sig)]) (key-str key))
+      (.removeEventListener el sig listener)))
+
   js/Window
   (-listen! [win sig key cb]
     (-unlisten! win sig key)
@@ -176,7 +186,7 @@
   (-unlisten! [win sig key]
     (when-let [listener (j/get-in win [:__listeners (key-str sig) (key-str key)])]
       (js-delete (j/get-in win [:__listeners (key-str sig)]) (key-str key))
-      (.removeEventListener js/window sig listener))))
+      (.removeEventListener win sig listener))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Resources / Textures / Resource loading

@@ -11,7 +11,8 @@
             [lambdaisland.puck.math :as m]
             [lambdaisland.daedalus :as daedalus]
             [lambdaisland.glogi.console :as glogi-console]
-            [lambdaisland.glogi :as log]))
+            [lambdaisland.glogi :as log]
+            [spel.svg :as svg]))
 
 (defonce state (atom {:scene nil
                       :time 0
@@ -62,19 +63,24 @@
 ;;       |- ruimteschip
 
 (j/assoc! stage :filters
-          #js [(doto (pixi/filters.ColorMatrixFilter.) (.polaroid))
+          #js [#_(doto (pixi/filters.ColorMatrixFilter.) (.polaroid))
                #_(pixelate/PixelateFilter. 5)
-               (crt/CRTFilter. #js {:lineWidth 0.2
-                                    :vignetting 0})])
+               #_(crt/CRTFilter. #js {:lineWidth 0.2
+                                      :vignetting 0})])
 
 (defmulti load-scene :scene)
 (defmulti start-scene :scene)
 (defmulti tick-scene :scene)
 (defmulti stop-scene :scene)
-(defmethod load-scene :default [])
-(defmethod start-scene :default [])
-(defmethod tick-scene :default [])
-(defmethod stop-scene :default [])
+(defmulti handle-event (fn [s e] (:scene s)))
+
+(defmethod load-scene :default [_])
+(defmethod start-scene :default [_])
+(defmethod tick-scene :default [_])
+(defmethod stop-scene :default [_]
+  (p/remove-children bg-layer)
+  (p/remove-children sprite-layer))
+(defmethod handle-event :default [_ _])
 
 (defn scene-state
   ([]
@@ -88,18 +94,29 @@
   (swap! state (fn [s]
                  (apply update-in s [:scenes (:scene s)] f args))))
 
+
 (add-watch state ::switch-scene
            (fn [_ _ old new]
              (when (not= (:scene old) (:scene new))
-               (log/info :switching-scene {:old (:scene old) :new (:scene new)} )
-               (promise/do
-                 (stop-scene old)
-                 (when-not (:loaded? new)
-                   (log/debug :loading-scene new)
-                   (promise/do
-                     (load-scene new)
-                     (swap! state assoc-in [:scenes (:scene new) :loaded?] true)))
-                 (start-scene new)))))
+               (let [scene-path [:scenes (:scene new)]
+                     new-scene (scene-state new (:scene new))]
+                 (log/info :switching-scene {:old (:scene old) :new (:scene new)} )
+                 (promise/do
+                   (stop-scene old)
+                   (if-not (:loaded? new)
+                     (do
+                       (log/debug :loading-scene new)
+                       (promise/let [new-state (load-scene new-scene)]
+                         (swap! state update-in scene-path
+                                (fn [scene]
+                                  (cond-> scene
+                                    (map? new-state)
+                                    (merge new-state)
+                                    :->
+                                    (assoc :scene (:scene new)
+                                           :loaded? true))))
+                         (start-scene (get-in @state scene-path))))
+                     (start-scene new-scene)))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -117,11 +134,13 @@
   (let [{:keys [width height]} (screen-size)]
     (let [ratio (screen-to-world-ratio)]
       (p/merge! world {:x (/ width 2)
-                     :scale {:x ratio
-                             :y ratio}}))
+                       :scale {:x ratio
+                               :y ratio}}))
     (.beginFill graphics achtergrond-kleur)
     (.drawRect graphics 0 0 width height)
     (.endFill graphics)))
+
+(defn center-viewport [x])
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -155,13 +174,42 @@
 
 (defn draw-background [sprite]
   (.removeChildren bg-layer)
-  (let [{:keys [width height]} (screen-size)]
-    (p/merge! sprite {:anchor {:x 0 :y 0}
-                    :scale {:x (/ world-height (:height sprite))
-                            :y (/ world-height (:height sprite))}})
-    (assoc! stage :x (- (/ width (screen-to-world-ratio) 2)
-                        (/ (:width sprite) 2)))
+  (let [{:keys [width height]} (screen-size)
+        texture-height (:height (:texture sprite))]
+    (p/merge! sprite {:anchor {:x 0.5 :y 0}
+                      :scale {:x (/ world-height texture-height)
+                              :y (/ world-height texture-height)}})
+    #_(assoc! stage :x (- (/ width (screen-to-world-ratio) 2)
+                          (/ (:width sprite) 2)))
     (conj! bg-layer sprite)))
+
+(defn walk-step [sprite delta speed]
+  (let [{:keys [destination position]} sprite]
+    (when destination
+      (when (< 5 (m/distance position destination))
+        (let [diff (m/v- destination position)
+              dist (m/vdiv diff (m/length diff))
+              step (m/v* dist (* delta speed))]
+          (m/!v+ position step))))))
+
+(defn pad-hit-area! [target pad-x pad-y]
+  (let [{:keys [x y width height]} (p/local-bounds target)]
+    (j/assoc! target :hitArea (p/rectangle (- x (/ pad-x 2))
+                                           (- y (/ pad-y 2))
+                                           (+ width pad-x)
+                                           (+ height pad-y)))))
+
+(defn key-event->keyword [e]
+  (let [k (.-key e)]
+    (case k
+      " " :Space
+      (keyword k))))
+
+(defn move-sprite [sprite delta]
+  (j/update! sprite :x + (* (j/get sprite :vx 0) delta))
+  (j/update! sprite :y + (* (j/get sprite :vy 0) delta)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defmethod load-scene :sensei [_]
   (promise/let [{:keys [sprites cliffs]}
@@ -175,34 +223,17 @@
   (let [speler (sprite :sensei)
         achtergrond (sprite :cliffs)]
     (p/merge! speler {:x 500
-                    :y 500
-                    :anchor {:x 0.5 :y 0.5}
-                    :scale {:x 0.1 :y 0.1}})
+                      :y 500
+                      :anchor {:x 0.5 :y 0.5}
+                      :scale {:x 0.1 :y 0.1}})
     (conj! sprite-layer speler)
     (draw-background achtergrond)))
 
 (defmethod tick-scene :sensei [{:keys [delta]}]
-  (let [{:keys [destination position]} (sprite :sensei)]
-    (when destination
-      (when (< 5 (m/distance position destination))
-        (let [diff (m/v- destination position)
-              dist (m/vdiv diff (m/length diff))
-              step (m/v* dist (* delta 2))]
-          (m/!v+ position step))))))
-
-(defmethod stop-scene :sensei [{:keys [speler achtergrond]}]
-  (disj! sprite-layer (sprite :sensei))
-  (disj! bg-layer (sprite :cliffs)))
+  (walk-step (sprite :sensei) delta 2))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Minispel
-
-(defn pad-hit-area! [target pad-x pad-y]
-  (let [{:keys [x y width height]} (p/local-bounds target)]
-    (j/assoc! target :hitArea (p/rectangle (- x (/ pad-x 2))
-                                           (- y (/ pad-y 2))
-                                           (+ width pad-x)
-                                           (+ height pad-y)))))
 
 (defmethod load-scene :space-invaders [_]
   (promise/let [{:keys [minispel]}
@@ -228,12 +259,6 @@
                              :vy -10
                              :visible true} prn))
       (conj! sprite-layer kogel))))
-
-(defn key-event->keyword [e]
-  (let [k (.-key e)]
-    (case k
-      " " :Space
-      (keyword k))))
 
 (defmethod start-scene :space-invaders [_]
   (let [schip (sprite :ruimteschip)
@@ -269,7 +294,7 @@
             y (range 3)
             :let [sprite (sprite [:virus x y])]]
       (p/merge! sprite {:x (+ -400 (* 100 x))
-                      :y (+ 100 (* 100 y))})
+                        :y (+ 100 (* 100 y))})
       (conj! virussen sprite))
 
     (conj! sprite-layer virussen schip links rechts schiet)
@@ -278,15 +303,8 @@
 
     (p/merge! links {:x -650 :y 930 :interactive true})
     (p/merge! rechts {:x -500 :y 930 :interactive true})
-    (p/merge! schiet {:x 550 :y 900 :interactive true})))
-
-(defmethod stop-scene :space-invaders [_]
-  (p/remove-children sprite-layer)
-  (p/remove-children bg-layer))
-
-(defn move-sprite [sprite delta]
-  (j/update! sprite :x + (* (j/get sprite :vx 0) delta))
-  (j/update! sprite :y + (* (j/get sprite :vy 0) delta)))
+    (p/merge! schiet {:x 550 :y 900 :interactive true})
+    nil))
 
 (defmethod tick-scene :space-invaders [{:keys [delta virussen keys]}]
   (move-sprite virussen delta)
@@ -318,21 +336,59 @@
         (disj! sprite-layer kogel)
         (disj! virussen virus)))))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Minispel
+
+(defmethod load-scene :mm [scene]
+  (promise/let [{:keys [textures]}
+                (svg/load-svg "images/maniac-mansion-achtegronden.svg"
+                              "maniac-mansion")
+                {:keys [jacko]} (p/load-resources! app {:jacko (:jacko images)})
+                jacko (p/sprite jacko)]
+    (p/merge! jacko {:x 0
+                     :y 1000
+                     :scale {:x 0.2 :y 0.2}
+                     :anchor {:x 0.5 :y 1}})
+    (-> scene
+        (into (map (juxt key (comp p/sprite val))) textures)
+        (assoc :jacko jacko))))
+
+(defmethod start-scene :mm [{:keys [hallway kitchen library jacko]}]
+  (draw-background kitchen)
+  (conj! sprite-layer jacko))
+
+(defmethod tick-scene :mm [{:keys [jacko delta]}]
+  (walk-step jacko delta 2))
+
+(defmethod handle-event :mm [{:keys [jacko]} [t e]]
+  (let [coords (if (:clientX e) e (first (:touches e)))]
+    (j/assoc! jacko :destination
+              (.applyInverse #_(get-in app [:stage :transform :worldTransform])
+                             (get-in world [:transform :worldTransform])
+                             (m/point (:clientX coords) (:clientY coords))))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Minispel
+
 (defonce init-once (promise/do
                      (init!)
-                     (swap! state assoc :scene :space-invaders)))
+                     (prn "set scene")
+                     (swap! state assoc :scene :space-invaders #_:mm)
+                     (doseq [t [:click :touchstart]]
+                       (p/listen! (first (js/document.getElementsByTagName "canvas"))
+                                  (name t) t
+                                  (fn [e] (handle-event (scene-state) [t e]))))))
 
 (defn on-hot-reload []
   (log/info :hot-reload! {})
   (stop-scene (scene-state))
   (start-scene (scene-state)))
 
-#_(swap! state assoc :scene :space-invaders)
+(comment
+  (swap! state assoc :scene :mm)
+  (swap! state assoc :scene :space-invaders)
 
-#_(Hammer. (first (js/document.getElementsByTagName "canvas")))
+  (scene-state)
 
-#_(defn touch-start [e]
-    (let [touch (first (:touches e))]
-      (j/assoc! (sprite :sensei) :destination
-                (.applyInverse (get-in app [:stage :transform :worldTransform])
-                               (m/point (:clientX touch) (:clientY touch))))))
+  (j/assoc! world :x 0)
+  )

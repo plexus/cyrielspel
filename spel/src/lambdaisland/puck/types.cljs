@@ -109,31 +109,49 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; DOM / browser types
 
+(def ^:dynamic *max-attr-length* 250)
+
+(defn- truncate-attr [attr-val]
+  (if (and (string? attr-val) (< *max-attr-length* (.-length attr-val)))
+    (str (subs attr-val 0 *max-attr-length*) "...")
+    attr-val))
+
+(register-printer js/Text js/Text #(.-data %))
+
 (register-printer
  js/Element
  'js/Element (fn hiccupize [^js e]
-               (if (string? e)
+               (cond
+                 (string? e)
                  e
+                 (instance? js/Text e)
+                 (.-data e)
+                 :else
                  (let [el [(keyword (str/lower-case (.-tagName e)))]]
                    (into (if-let [attrs (seq (.getAttributeNames e))]
                            (conj el (into {}
                                           (map (juxt csk/->kebab-case-keyword
-                                                     #(.getAttribute e %)))
+                                                     #(truncate-attr (.getAttribute e %))))
                                           attrs))
                            el)
                          (map hiccupize)
-                         (.-children e))))))
+                         (.-childNodes e))))))
 
-(register-printer
- js/HTMLDocument
- 'js/HTMLDocument
- (fn [^js d]
-   {:root (.-documentElement d)}))
+(register-printer js/HTMLDocument 'js/HTMLDocument (fn [^js d] {:root (.-documentElement d)}))
+(register-printer js/XMLDocument 'js/XMLDocument (fn [^js d] {:root (.-documentElement d)}))
+(register-printer js/Document 'js/Document (fn [^js d] {:root (.-documentElement d)}))
+
+(extend-type js/Node
+  ITransientCollection
+  (-conj! [^js this child]
+    (.appendChild this child)))
 
 (register-keys-printer js/Window 'js/Window [:location :document :devicePixelRatio :innerWidth :innerHeight])
 
 (register-printer js/Location 'js/Location str)
 
+(register-printer js/HTMLCollection 'js/HTMLCollection #(into [] %))
+(register-printer js/NodeList 'js/NodeList #(into [] %))
 
 
 (when (exists? js/KeyboardEvent)
