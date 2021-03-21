@@ -159,8 +159,11 @@
     (catch :default _)))
 
 (defn elements
-  "Get a sequence of maps, each corresponding with an SVG element. Only elements
-  that have EDN metadata in a `<desc>` element are considered.
+  "Extract SVG elements that have EDN metadata.
+
+  Takes an SVG DOM element and returns a sequence of maps, each corresponding
+  with an SVG element. Only elements that have EDN metadata in a `<desc>`
+  element are considered.
 
   To use this, in your SVG editor (Inkscape) use the \"description\" field under
   \"object properties\" to add metadata to elements, in the form of an EDN map.
@@ -180,13 +183,18 @@
          (= "path" (.-tagName el))
          (assoc :path (path->coords (.getAttribute el "d")))
          (= "rect" (.-tagName el))
-         (assoc :rect (svg-rect->pixi el)))))
+         (assoc :rect (svg-rect->pixi el))
+         (= "image" (.-tagName el))
+         (assoc :html-image (svg-image->html-img el)))))
    (map #(.-parentNode %) (query-all svg "desc"))))
+
+
 
 (comment
   (p/let [res (fetch-svg "images/maniac-mansion-achtegronden.svg")]
     (def ss res))
 
+  (tap>  (into {} (map (juxt :id identity)) (elements ss)))
   (p/let [res (load-svg "images/maniac-mansion-achtegronden.svg" "maniac-mansion")]
     (def rr res))
 

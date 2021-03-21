@@ -20,7 +20,7 @@
                                :space-invaders {:virus-vx 1}}
                       :sprites {}}))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (glogi-console/install!)
 (log/set-levels {:glogi/root :all})
@@ -48,7 +48,8 @@
 
 (defonce bg-layer (p/container {}))
 (defonce sprite-layer (p/container {}))
-(defonce world (p/container {} bg-layer sprite-layer))
+(defonce viewport (p/container {} bg-layer sprite-layer))
+(defonce world (p/container {} viewport))
 
 (defonce fill-layer (p/container {} graphics))
 
@@ -57,10 +58,11 @@
 ;; stage
 ;; |- fill
 ;; |- world
-;;    |- bg-layer
-;;    |- sprites
-;;       |- virussen -> virus 1 / virus 2
-;;       |- ruimteschip
+;;    |- viewport
+;;      |- bg-layer
+;;      |- sprites
+;;         |- virussen -> virus 1 / virus 2
+;;         |- ruimteschip
 
 (j/assoc! stage :filters
           #js [#_(doto (pixi/filters.ColorMatrixFilter.) (.polaroid))
@@ -281,6 +283,7 @@
 
     (p/listen! js/window :keydown #(scene-swap! update :keys (fnil conj #{}) (key-event->keyword %)))
     (p/listen! js/window :keyup #(scene-swap! update :keys disj (keyword (key-event->keyword %))))
+    (p/listen! js/window :blur #(scene-swap! update :keys empty))
 
     (doseq [e [:touchend :mouseup]]
       (p/listen! links e #(j/assoc! schip :vx 0))
@@ -339,32 +342,59 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Minispel
 
-(defmethod load-scene :mm [scene]
-  (promise/let [{:keys [textures]}
-                (svg/load-svg "images/maniac-mansion-achtegronden.svg"
-                              "maniac-mansion")
-                {:keys [jacko]} (p/load-resources! app {:jacko (:jacko images)})
-                jacko (p/sprite jacko)]
-    (p/merge! jacko {:x 0
-                     :y 1000
-                     :scale {:x 0.2 :y 0.2}
-                     :anchor {:x 0.5 :y 1}})
-    (-> scene
-        (into (map (juxt key (comp p/sprite val))) textures)
-        (assoc :jacko jacko))))
+(def mm-svg-url "images/maniac-mansion-achtegronden.svg")
 
-(defmethod start-scene :mm [{:keys [hallway kitchen library jacko]}]
-  (draw-background kitchen)
+(defmethod load-scene :mm [scene]
+  (promise/let [{:keys [jacko]} (p/load-resources! app {:jacko (:jacko images)})
+                svg (svg/fetch-svg mm-svg-url)]
+    (let [jacko (p/sprite jacko)
+
+          elements (svg/elements svg)
+          element  (into {} (map (juxt :id identity)) elements)
+          group    (group-by :type elements)
+
+          bg    (element :background)
+          base  (svg/base-texture (:html-image bg)
+                                  mm-svg-url
+                                  "maniac-mansion")
+          rooms (group :room)]
+      (p/merge! jacko {:x      0
+                       :y      1000
+                       :scale  {:x 0.2 :y 0.2}
+                       :anchor {:x 0.5 :y 1}})
+      (assoc scene
+             :room :hallway
+             :jacko jacko
+             :rooms (into {}
+                          (map
+                           (juxt :id
+                                 (fn [{:keys [id rect]}]
+                                   {:id              id
+                                    :collision-paths (->> (group :collision)
+                                                          (filter (comp #{id} :for)))
+                                    :sprite          (p/sprite (p/texture base rect))})))
+                          rooms)))))
+
+(defmethod start-scene :mm [{:keys [rooms room jacko]}]
+  (draw-background (-> rooms room :sprite))
   (conj! sprite-layer jacko))
 
 (defmethod tick-scene :mm [{:keys [jacko delta]}]
-  (walk-step jacko delta 2))
+  (walk-step jacko delta 2)
+  (let [viewport-limit (/ (- (:width (p/local-bounds bg-layer)) (visible-world-width)) 2)]
+    (when (and (< 300 (+ (:x jacko) (:x viewport)))
+               (< (- (:x viewport)) viewport-limit))
+      ;; Pan viewport to the right
+      (j/assoc! viewport :x (- 300 (:x jacko))))
+    (when (and (< (+ (:x jacko) (:x viewport)) -300)
+               (< (:x viewport) viewport-limit))
+      ;; Pan viewport to the left
+      (j/assoc! viewport :x (- (- (:x jacko)) 300)))))
 
 (defmethod handle-event :mm [{:keys [jacko]} [t e]]
   (let [coords (if (:clientX e) e (first (:touches e)))]
     (j/assoc! jacko :destination
-              (.applyInverse #_(get-in app [:stage :transform :worldTransform])
-                             (get-in world [:transform :worldTransform])
+              (.applyInverse (get-in viewport [:transform :worldTransform])
                              (m/point (:clientX coords) (:clientY coords))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -373,7 +403,7 @@
 (defonce init-once (promise/do
                      (init!)
                      (prn "set scene")
-                     (swap! state assoc :scene :space-invaders #_:mm)
+                     (swap! state assoc :scene #_:space-invaders :mm)
                      (doseq [t [:click :touchstart]]
                        (p/listen! (first (js/document.getElementsByTagName "canvas"))
                                   (name t) t

@@ -16,7 +16,8 @@
  :aliases
  {:dev
   {:extra-paths ["dev"]
-   :extra-deps  {thheller/shadow-cljs {:mvn/version "2.11.18"}}}
+   :extra-deps  {thheller/shadow-cljs {:mvn/version "2.11.18"}
+                 djblue/portal        {:mvn/version "0.10.0"}}}
 
   :test
   {:extra-paths ["test"]

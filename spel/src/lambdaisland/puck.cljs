@@ -203,6 +203,11 @@
   [app resource-name texture-name]
   (j/get (:textures (resource app resource-name)) texture-name))
 
+(defn texture
+  "Construct a texture based on a base texture and a rect."
+  [base rect]
+  (pixi/Texture. base rect))
+
 (defn load-resources!
   "Convenience helper for loading resources, takes a map of resource-name => url,
   returns a promise which resolves to a map of resource-name => resource when
@@ -220,6 +225,10 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Geometry
+
+(defn bounds
+  [^js renderable]
+  (.getBounds renderable))
 
 (defn local-bounds
   "Retrieves the local bounds of the displayObject or container as a rectangle object.
@@ -243,8 +252,8 @@
   "Do the AABB boxes of the two display objects overlap/touch. Useful for
   rudimentary collision detection."
   [a b]
-  (let [ab (.getBounds ^js a)
-        bb (.getBounds ^js b)]
+  (let [ab (bounds a)
+        bb (bounds b)]
     (and (< (:x bb) (+ (:x ab) (:width ab)))
          (< (:x ab) (+ (:x bb) (:width bb)))
          (< (:y bb) (+ (:y ab) (:height ab)))

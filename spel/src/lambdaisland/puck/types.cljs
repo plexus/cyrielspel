@@ -5,7 +5,8 @@
             [clojure.string :as str]
             [applied-science.js-interop :as j]
             [camel-snake-kebab.core :as csk]
-            [lambdaisland.data-printers :as data-printers]))
+            [lambdaisland.data-printers :as data-printers]
+            [clojure.core.protocols :as protocols]))
 
 (defn lookupify
   "Access object properties via keyword access, and allow destructuring with
@@ -36,7 +37,14 @@
                                (reduce (fn [m k]
                                          (assoc m k (j/get obj k)))
                                        {}
-                                       keys))))
+                                       keys)))
+  (extend-type type
+    protocols/Datafiable
+    (datafy [obj]
+      (into ^{:type type} {} (map (juxt identity #(j/get obj %))) keys))
+    protocols/Navigable
+    (nav [obj k v]
+      (j/get obj k))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Pixi
