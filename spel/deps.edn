@@ -1,8 +1,8 @@
 {:paths ["src" "resources"]
 
  :deps
- {org.clojure/clojure                 {:mvn/version "1.10.2"}
-  org.clojure/clojurescript           {:mvn/version "1.10.773"}
+ {org.clojure/clojure                 {:mvn/version "1.10.3"}
+  org.clojure/clojurescript           {:mvn/version "1.10.836"}
   applied-science/js-interop          {:mvn/version "0.2.7"}
   camel-snake-kebab/camel-snake-kebab {:mvn/version "0.4.2"}
   cljs-bean/cljs-bean                 {:mvn/version "1.6.0"}
@@ -10,15 +10,15 @@
   lambdaisland/daedalus               {:mvn/version "0.0.14"}
   #_{:local/root "/home/arne/github/lambdaisland/daedalus"}
   mhuebert/kitchen-async              {:mvn/version "0.1.0"}
-  lambdaisland/glogi                  {:mvn/version "1.0.74"}
+  lambdaisland/glogi                  {:mvn/version "1.0.83"}
   reagent/reagent                     {:mvn/version "1.0.0"}}
 
  :aliases
  {:dev
   {:extra-paths ["dev"]
-   :extra-deps  {thheller/shadow-cljs {:mvn/version "2.11.18"}
+   :extra-deps  {thheller/shadow-cljs {:mvn/version "2.11.23"}
                  djblue/portal        {:mvn/version "0.10.0"}}}
 
   :test
   {:extra-paths ["test"]
-   :extra-deps  {lambdaisland/kaocha {:mvn/version "1.0.732"}}}}}
+   :extra-deps  {lambdaisland/kaocha {:mvn/version "1.0.829"}}}}}
