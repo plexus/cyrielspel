@@ -114,6 +114,20 @@
 
 (register-keys-printer pixi/InteractionData 'pixi/InteractionData [:global :target :originalEvent :identifier :isPrimary :button :buttons :width :height :tiltX :tiltY :pointerType :pressure :rotationAngle :twist :tangentialPressure])
 
+(extend-protocol IAssociative
+  pixi/Point
+  (-assoc [coll k v]
+    (doto (.clone coll)
+      (j/assoc! k v)))
+  pixi/Matrix
+  (-assoc [coll k v]
+    (doto (.clone coll)
+      (j/assoc! k v)))
+  pixi/Rectangle
+  (-assoc [coll k v]
+    (doto (.clone coll)
+      (j/assoc! k v))))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; DOM / browser types
 

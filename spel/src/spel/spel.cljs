@@ -9,6 +9,7 @@
             [lambdaisland.puck :as p]
             [kitchen-async.promise :as promise]
             [lambdaisland.puck.math :as m]
+            [lambdaisland.puck.daedalus :as puck-daedalus]
             [lambdaisland.daedalus :as daedalus]
             [lambdaisland.glogi.console :as glogi-console]
             [lambdaisland.glogi :as log]
@@ -312,8 +313,6 @@
 (defmethod tick-scene :space-invaders [{:keys [delta virussen keys]}]
   (move-sprite virussen delta)
 
-  (prn keys)
-
   (when (:ArrowLeft keys)
     (j/update! (sprite :ruimteschip) :x - 10))
   (when (:ArrowRight keys)
@@ -350,52 +349,102 @@
     (let [jacko (p/sprite jacko)
 
           elements (svg/elements svg)
-          element  (into {} (map (juxt :id identity)) elements)
-          group    (group-by :type elements)
+          group    (group-by :type (vals elements))
 
-          bg    (element :background)
-          base  (svg/base-texture (:html-image bg)
-                                  mm-svg-url
-                                  "maniac-mansion")
-          rooms (group :room)]
-      (p/merge! jacko {:x      0
-                       :y      1000
-                       :scale  {:x 0.2 :y 0.2}
+          bg             (:background elements)
+          base           (svg/base-texture (:html-image bg)
+                                           mm-svg-url
+                                           "maniac-mansion")
+          debug-graphics (p/graphics)
+          debug-view     (puck-daedalus/simple-view debug-graphics)
+
+          player-loc   (daedalus/entity-ai {:x 2000 :y 950 :radius 20})
+          rooms        (into {}
+                             (map
+                              (juxt :id
+                                    (fn [{:keys [id rect]}]
+                                      (let [obstacles (->> (group :obstacle)
+                                                           (filter (comp #{id} :for))
+                                                           (map :path))
+                                            ratio     (/ 1000 (:height rect))
+                                            width     (* (:width rect) ratio)]
+                                        {:id     id
+                                         :sprite (p/sprite (p/texture base rect))
+                                         :width  width
+                                         :mesh   (reduce
+                                                  (fn [mesh path]
+                                                    (run! #(m/!v* % ratio) path)
+                                                    (conj! mesh (daedalus/polygon (map (juxt :x :y) path)))
+                                                    mesh)
+                                                  (daedalus/build-rect-mesh width 1000)
+                                                  obstacles)}))))
+                             (group :room))
+          initial-room :hallway
+          path         #js [2000 950]]
+      (p/merge! jacko {:scale  {:x 0.2 :y 0.2}
                        :anchor {:x 0.5 :y 1}})
+      (p/merge! debug-graphics {:x (- (/ (:width (get rooms initial-room)) 2))})
       (assoc scene
-             :room :hallway
+             :room initial-room
+             :player-loc player-loc
              :jacko jacko
-             :rooms (into {}
-                          (map
-                           (juxt :id
-                                 (fn [{:keys [id rect]}]
-                                   {:id              id
-                                    :collision-paths (->> (group :collision)
-                                                          (filter (comp #{id} :for)))
-                                    :sprite          (p/sprite (p/texture base rect))})))
-                          rooms)))))
+             :path path
+             :path-finder (daedalus/path-finder {:entity player-loc
+                                                 :mesh   (:mesh (get rooms initial-room))})
+             :path-iterator (daedalus/linear-path-sampler {:entity           player-loc
+                                                           :samplingDistance 10
+                                                           :path             path})
+             :rooms rooms
+             :debug-graphics debug-graphics
+             :debug-view debug-view
+             :debug? true))))
 
-(defmethod start-scene :mm [{:keys [rooms room jacko]}]
+(defmethod start-scene :mm [{:keys [rooms room jacko debug-graphics debug-view mesh debug? player-loc path]}]
   (draw-background (-> rooms room :sprite))
-  (conj! sprite-layer jacko))
+  (conj! sprite-layer jacko)
+  (when debug?
+    (conj! sprite-layer debug-graphics)
+    (daedalus/draw-mesh debug-view mesh)
+    (daedalus/draw-entity debug-view player-loc)
+    (daedalus/draw-path debug-view path)))
 
-(defmethod tick-scene :mm [{:keys [jacko delta]}]
-  (walk-step jacko delta 2)
-  (let [viewport-limit (/ (- (:width (p/local-bounds bg-layer)) (visible-world-width)) 2)]
-    (when (and (< 300 (+ (:x jacko) (:x viewport)))
-               (< (- (:x viewport)) viewport-limit))
-      ;; Pan viewport to the right
-      (j/assoc! viewport :x (- 300 (:x jacko))))
-    (when (and (< (+ (:x jacko) (:x viewport)) -300)
-               (< (:x viewport) viewport-limit))
-      ;; Pan viewport to the left
-      (j/assoc! viewport :x (- (- (:x jacko)) 300)))))
+(def debug-count (atom 0))
 
-(defmethod handle-event :mm [{:keys [jacko]} [t e]]
-  (let [coords (if (:clientX e) e (first (:touches e)))]
-    (j/assoc! jacko :destination
-              (.applyInverse (get-in viewport [:transform :worldTransform])
-                             (m/point (:clientX coords) (:clientY coords))))))
+(defmethod tick-scene :mm [{:keys [jacko delta path-iterator player-loc path rooms room debug-view debug?]}]
+  #_  (walk-step jacko delta 2)
+  (let [room (get rooms room)]
+    (.next path-iterator)
+    (let [room-width (:width room)
+          mesh (:mesh room)]
+      (when-let [x (:x player-loc)] (j/assoc! jacko :x (- x (/ room-width 2))))
+      (when-let [y (:y player-loc)] (j/assoc! jacko :y y))
+      (when (and debug? (= 0 (mod (swap! debug-count inc) 10)))
+        (daedalus/clear debug-view)
+        (daedalus/draw-mesh debug-view mesh)
+        (daedalus/draw-entity debug-view player-loc)
+        (daedalus/draw-path debug-view path)))
+
+    (let [viewport-limit (/ (- (:width (p/local-bounds bg-layer)) (visible-world-width)) 2)]
+      (when (and (< 300 (+ (:x jacko) (:x viewport)))
+                 (< (- (:x viewport)) viewport-limit))
+        ;; Pan viewport to the right
+        (j/assoc! viewport :x (- 300 (:x jacko))))
+      (when (and (< (+ (:x jacko) (:x viewport)) -300)
+                 (< (:x viewport) viewport-limit))
+        ;; Pan viewport to the left
+        (j/assoc! viewport :x (- (- (:x jacko)) 300))))))
+
+(defmethod handle-event :mm [{:keys [jacko path-finder path-iterator path rooms room]} [t e]]
+  (let [room-width (-> rooms room :width)
+        coords (if (:clientX e) e (first (:touches e)))
+        destination (.applyInverse (get-in viewport [:transform :worldTransform])
+                                   (m/point (:clientX coords) (:clientY coords)))]
+
+    (daedalus/find-path path-finder (+ (:x destination) (/ room-width 2)) (:y destination) path)
+    (.reset path-iterator)
+    #_(j/assoc! jacko :destination destination)))
+
+(daedalus/path-iterator {:entity (daedalus/entity-ai {:x 10 :y 20})})
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Minispel

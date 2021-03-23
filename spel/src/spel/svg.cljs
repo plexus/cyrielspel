@@ -1,10 +1,10 @@
 (ns spel.svg
   (:require ["pixi.js" :as pixi]
             [applied-science.js-interop :as j]
-            [kitchen-async.promise :as p]
+            [cljs.reader :as edn]
             [clojure.string :as str]
-            [lambdaisland.puck.math :as math]
-            [cljs.reader :as edn]))
+            [kitchen-async.promise :as p]
+            [lambdaisland.puck.math :as math]))
 
 (defprotocol Coercions
   (>str [_])
@@ -158,6 +158,35 @@
       (edn/read-string (.-innerHTML desc)))
     (catch :default _)))
 
+(defn adjust-origin [{:keys [rect] :as origin} element]
+  (let [{:keys [x y]} rect
+        offset (math/point x y)]
+    (cond-> element
+      (:path element)
+      (update :path (fn [path]
+                      (prn path)
+                      (map #(math/v- % offset) path)))
+      (:rect element)
+      (update :rect (fn [r]
+                      (-> r
+                          (update :x - x)
+                          (update :y - x)))))))
+
+(defn adjust-origins
+  "When an element has an `:origin` key in its EDN metadata pointing at the ID of
+  another element, use that elements x/y position as the origin, adjusting any
+  parsed out path/rect elements accordingly."
+  [elements]
+  (into {}
+        (map (juxt key
+                   (comp (fn [el]
+                           (if-let [origin (:origin el)]
+                             (do
+                               (adjust-origin (get elements origin) el))
+                             el))
+                         val)))
+        elements))
+
 (defn elements
   "Extract SVG elements that have EDN metadata.
 
@@ -173,20 +202,23 @@
   rect elements are parsed to pixi/Point / pixi/Rectangle coordinates and added
   as `:path` / `:rect` respectively."
   [svg]
-  (keep
-   (fn [el]
-     (when-let [data (desc-edn el)]
-       (cond-> (assoc data
-                      :id (keyword (.getAttribute el "id"))
-                      :element el
-                      :tag (.-tagName el))
-         (= "path" (.-tagName el))
-         (assoc :path (path->coords (.getAttribute el "d")))
-         (= "rect" (.-tagName el))
-         (assoc :rect (svg-rect->pixi el))
-         (= "image" (.-tagName el))
-         (assoc :html-image (svg-image->html-img el)))))
-   (map #(.-parentNode %) (query-all svg "desc"))))
+  (->> (query-all svg "desc")
+       (map #(.-parentNode %))
+       (keep
+        (fn [el]
+          (when-let [data (desc-edn el)]
+            (cond-> (assoc data
+                           :id (keyword (.getAttribute el "id"))
+                           :element el
+                           :tag (.-tagName el))
+              (= "path" (.-tagName el))
+              (assoc :path (path->coords (.getAttribute el "d")))
+              (= "rect" (.-tagName el))
+              (assoc :rect (svg-rect->pixi el))
+              (= "image" (.-tagName el))
+              (assoc :html-image (svg-image->html-img el))))))
+       (into {} (map (juxt :id identity)))
+       (adjust-origins)))
 
 
 
@@ -194,7 +226,10 @@
   (p/let [res (fetch-svg "images/maniac-mansion-achtegronden.svg")]
     (def ss res))
 
-  (tap>  (into {} (map (juxt :id identity)) (elements ss)))
+  (tap> (elements ss))
+
+  (clojure.datafy/datafy (:rect (second (elements ss))))
+
   (p/let [res (load-svg "images/maniac-mansion-achtegronden.svg" "maniac-mansion")]
     (def rr res))
 

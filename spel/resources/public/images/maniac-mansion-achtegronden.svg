@@ -42,9 +42,9 @@
      inkscape:window-height="2083"
      id="namedview4"
      showgrid="false"
-     inkscape:zoom="1.9542857"
-     inkscape:cx="497.78985"
-     inkscape:cy="392.69275"
+     inkscape:zoom="5.5275547"
+     inkscape:cx="259.32427"
+     inkscape:cy="301.44926"
      inkscape:window-x="1920"
      inkscape:window-y="0"
      inkscape:window-maximized="1"
@@ -78,36 +78,35 @@
        height="119.84372"
        x="10.250672"
        y="464.85251" />
-    <g
-       id="g877">
-      <rect
-         style="opacity:1;fill:#ff0000;fill-opacity:0.337206;stroke:#0000ff;stroke-width:1;stroke-miterlimit:4;stroke-dasharray:none;stop-color:#000000"
-         id="hallway"
-         width="475.33768"
-         height="119.86358"
-         x="8.3404942"
-         y="165.01428">
-        <desc
-           id="desc871">{:type :room}</desc>
-      </rect>
-      <path
-         style="fill:none;stroke:#000000;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
-         d="m 32.336222,255.49758 355.173368,0.17187 41.94725,6.60637 14.36664,-0.1179 -44.53466,-90.4214 0.33798,-6.42356 -391.2863058,-0.29868 0.01038,105.2647 z"
-         id="path867"
-         sodipodi:nodetypes="ccccccccc">
-        <desc
-           id="desc850">{:type :collision
- :for :hallway}</desc>
-      </path>
-      <path
-         style="fill:none;stroke:#000000;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
-         d="m 476.87818,262.15376 -46.5477,-89.28014 0.60599,-7.33049 52.74169,-0.52885 0.0986,97.57135 z"
-         id="path869">
-        <desc
-           id="desc848">{:type :collision
- :for :hallway}</desc>
-      </path>
-    </g>
+    <rect
+       style="fill:#ff0000;fill-opacity:0.337206;stroke:#0000ff;stroke-width:1.00157475;stroke-miterlimit:4;stroke-dasharray:none;stop-color:#000000"
+       id="hallway"
+       width="475.33768"
+       height="119.86358"
+       x="8.3404942"
+       y="165.01428">
+      <desc
+         id="desc871">{:type :room}</desc>
+    </rect>
+    <path
+       style="fill:none;stroke:#000000;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+       d="m 32.336222,255.49758 54.786085,0.0265 -0.287414,-9.10692 23.450077,0.0113 -0.29118,9.10664 277.5158,0.13429 41.94725,6.60637 14.36664,-0.1179 -44.53466,-90.4214 0.33798,-6.42356 -391.2863058,-0.29868 0.01038,105.2647 z"
+       id="hallway-walls-obstacle"
+       sodipodi:nodetypes="ccccccccccccc">
+      <desc
+         id="desc850">{:type :obstacle
+ :for :hallway
+ :origin :hallway}</desc>
+    </path>
+    <path
+       style="fill:none;stroke:#000000;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+       d="m 476.87818,262.15376 -46.5477,-89.28014 0.60599,-7.33049 52.74169,-0.52885 0.0986,97.57135 z"
+       id="hallway-stairs-obstacle">
+      <desc
+         id="desc848">{:type :obstacle
+ :for :hallway
+ :origin :hallway}</desc>
+    </path>
     <rect
        style="opacity:0.771544;fill:#ff0000;fill-opacity:0.337206;stroke:#0000ff;stroke-width:1;stroke-miterlimit:4;stroke-dasharray:none;stop-color:#000000"
        id="library"
@@ -122,5 +121,25 @@
        height="120.68913"
        x="16.15539"
        y="15.166202" />
+    <rect
+       style="fill:#800000;stroke:#00ff00;stroke-width:1;stroke-miterlimit:4;stroke-dasharray:none;stop-color:#000000"
+       id="hallway-_gallery"
+       width="21.41338"
+       height="7.3980813"
+       x="88.580406"
+       y="248.13702">
+      <desc
+         id="desc874">{:type :collision}</desc>
+    </rect>
+    <rect
+       style="fill:none;stroke:#00ff00;stroke-width:1;stroke-miterlimit:4;stroke-dasharray:none;stop-color:#000000"
+       id="gallery"
+       width="221.05066"
+       height="120.12978"
+       x="254.07095"
+       y="315.31934">
+      <desc
+         id="desc872">{:type :room}</desc>
+    </rect>
   </g>
 </svg>
