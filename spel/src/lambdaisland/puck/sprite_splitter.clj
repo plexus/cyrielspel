@@ -1,4 +1,4 @@
-(ns trypixi.splitter
+(ns lambdaisland.puck.sprite-splitter
   (:require [clojure.java.io :as io]
             [clojure.string :as str])
   (:import java.awt.Image

@@ -83,6 +83,7 @@
 (defmethod stop-scene :default [_]
   (p/remove-children bg-layer)
   (p/remove-children sprite-layer))
+
 (defmethod handle-event :default [_ _])
 
 (defn scene-state
@@ -96,7 +97,6 @@
 (defn scene-swap! [f & args]
   (swap! state (fn [s]
                  (apply update-in s [:scenes (:scene s)] f args))))
-
 
 (add-watch state ::switch-scene
            (fn [_ _ old new]
@@ -143,7 +143,9 @@
     (.drawRect graphics 0 0 width height)
     (.endFill graphics)))
 
-(defn center-viewport [x])
+(defn viewport->world [point]
+  (.applyInverse (get-in viewport [:transform :worldTransform])
+                 point))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -176,24 +178,13 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defn draw-background [sprite]
-  (.removeChildren bg-layer)
+  (p/remove-children bg-layer)
   (let [{:keys [width height]} (screen-size)
         texture-height (:height (:texture sprite))]
     (p/merge! sprite {:anchor {:x 0.5 :y 0}
                       :scale {:x (/ world-height texture-height)
                               :y (/ world-height texture-height)}})
-    #_(assoc! stage :x (- (/ width (screen-to-world-ratio) 2)
-                          (/ (:width sprite) 2)))
     (conj! bg-layer sprite)))
-
-(defn walk-step [sprite delta speed]
-  (let [{:keys [destination position]} sprite]
-    (when destination
-      (when (< 5 (m/distance position destination))
-        (let [diff (m/v- destination position)
-              dist (m/vdiv diff (m/length diff))
-              step (m/v* dist (* delta speed))]
-          (m/!v+ position step))))))
 
 (defn pad-hit-area! [target pad-x pad-y]
   (let [{:keys [x y width height]} (p/local-bounds target)]
@@ -233,10 +224,10 @@
     (draw-background achtergrond)))
 
 (defmethod tick-scene :sensei [{:keys [delta]}]
-  (walk-step (sprite :sensei) delta 2))
+  #_(walk-step (sprite :sensei) delta 2))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Minispel
+;; Space Invaders
 
 (defmethod load-scene :space-invaders [_]
   (promise/let [{:keys [minispel]}
@@ -391,9 +382,9 @@
              :path path
              :path-finder (daedalus/path-finder {:entity player-loc
                                                  :mesh   (:mesh (get rooms initial-room))})
-             :path-iterator (daedalus/linear-path-sampler {:entity           player-loc
-                                                           :samplingDistance 10
-                                                           :path             path})
+             :path-sampler (daedalus/linear-path-sampler {:entity           player-loc
+                                                          :samplingDistance 10
+                                                          :path             path})
              :rooms rooms
              :debug-graphics debug-graphics
              :debug-view debug-view
@@ -410,10 +401,10 @@
 
 (def debug-count (atom 0))
 
-(defmethod tick-scene :mm [{:keys [jacko delta path-iterator player-loc path rooms room debug-view debug?]}]
+(defmethod tick-scene :mm [{:keys [jacko delta path-sampler player-loc path rooms room debug-view debug?]}]
   #_  (walk-step jacko delta 2)
   (let [room (get rooms room)]
-    (.next path-iterator)
+    (.next path-sampler)
     (let [room-width (:width room)
           mesh (:mesh room)]
       (when-let [x (:x player-loc)] (j/assoc! jacko :x (- x (/ room-width 2))))
@@ -434,20 +425,15 @@
         ;; Pan viewport to the left
         (j/assoc! viewport :x (- (- (:x jacko)) 300))))))
 
-(defmethod handle-event :mm [{:keys [jacko path-finder path-iterator path rooms room]} [t e]]
+(defmethod handle-event :mm [{:keys [jacko path-finder path-sampler path rooms room]} [t e]]
   (let [room-width (-> rooms room :width)
         coords (if (:clientX e) e (first (:touches e)))
-        destination (.applyInverse (get-in viewport [:transform :worldTransform])
-                                   (m/point (:clientX coords) (:clientY coords)))]
-
+        destination (viewport->world (m/point (:clientX coords) (:clientY coords)))]
     (daedalus/find-path path-finder (+ (:x destination) (/ room-width 2)) (:y destination) path)
-    (.reset path-iterator)
+    (daedalus/reset path-sampler)
     #_(j/assoc! jacko :destination destination)))
 
-(daedalus/path-iterator {:entity (daedalus/entity-ai {:x 10 :y 20})})
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Minispel
 
 (defonce init-once (promise/do
                      (init!)
