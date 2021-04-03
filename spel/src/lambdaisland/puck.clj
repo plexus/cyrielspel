@@ -2,7 +2,7 @@
   (:require [applied-science.js-interop :as j]
             [lambdaisland.puck.util :as util]))
 
-(defmacro merge!
+(defmacro assign!
   "Recursively merge values into a JavaScript object. Useful interop addition
   since pixi often requires setting values several levels deep into an object
   hierarchy."

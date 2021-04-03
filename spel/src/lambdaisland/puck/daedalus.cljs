@@ -1,4 +1,5 @@
 (ns lambdaisland.puck.daedalus
+  "Bridging Pixi/Puck and Daedalus path finding"
   (:require [lambdaisland.daedalus :as dae]
             [lambdaisland.puck :as puck]
             [lambdaisland.puck.math :as math]))
@@ -27,5 +28,19 @@
     (.drawPolygon graphics (into-array (map (fn [[x y]] (math/point x y))
                                             (partition 2 points))))))
 
-(defn simple-view [pixi-graphics]
+(defn simple-view
+  "Wraps a pixi Graphics object so that it can be passed
+  to [[lambdaisland.daedalus/draw-mesh]], [[lambdaisland.daedalus/draw-entity]],
+  and [[lambdaisland.daedalus/draw-path]], for easy debugging."
+  [pixi-graphics]
   (dae/simple-view (PixiBasicCanvas. pixi-graphics) {}))
+
+(defn with-radius
+  "Add a get_radius() method to the given JavaScript object. This is enough to
+  make a pixi DisplayObject (like a Sprite) compatible with Daedalus's
+  path-finder/path-sampler, so you can forgo copying coordinates between a
+  Daedalus EntityAI and your display-object."
+  [entity radius]
+  (specify! entity
+    Object
+    (get_radius [this] radius)))

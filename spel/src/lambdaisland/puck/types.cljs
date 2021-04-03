@@ -62,8 +62,6 @@
     {:x (j/get obj :x)
      :y (j/get obj :y)}))
 
-(tap> (pixi/Point. 10 10))
-
 (register-keys-printer pixi/ObservablePoint 'pixi/ObservablePoint [:x :y])
 (register-keys-printer pixi/Matrix 'pixi/Matrix [:a :b :c :d :tx :ty])
 (register-keys-printer pixi/Transform 'pixi/Transform [:worldTransform :localTransform :position :scale :pivot :skew])

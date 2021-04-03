@@ -8,7 +8,7 @@
             [lambdaisland.puck.types]
             [camel-snake-kebab.core :as csk]
             [lambdaisland.puck.util :as util])
-  (:require-macros [lambdaisland.puck :refer [merge!]]))
+  (:require-macros [lambdaisland.puck :refer [assign!]]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Helpers
@@ -278,7 +278,7 @@
   "Create a container and populate it"
   [opts & children]
   (let [c (pixi/Container.)]
-    (merge! c opts)
+    (assign! c opts)
     (apply conj! c children)
     c))
 

@@ -7,6 +7,7 @@
             [applied-science.js-interop :as j]
             [clojure.string :as str]
             [lambdaisland.puck :as p]
+            [lambdaisland.puck.collisions :as collisions]
             [kitchen-async.promise :as promise]
             [lambdaisland.puck.math :as m]
             [lambdaisland.puck.daedalus :as puck-daedalus]
@@ -136,9 +137,9 @@
 (defn resize-pixi []
   (let [{:keys [width height]} (screen-size)]
     (let [ratio (screen-to-world-ratio)]
-      (p/merge! world {:x (/ width 2)
-                       :scale {:x ratio
-                               :y ratio}}))
+      (p/assign! world {:x 0
+                        :scale {:x ratio
+                                :y ratio}}))
     (.beginFill graphics achtergrond-kleur)
     (.drawRect graphics 0 0 width height)
     (.endFill graphics)))
@@ -181,9 +182,9 @@
   (p/remove-children bg-layer)
   (let [{:keys [width height]} (screen-size)
         texture-height (:height (:texture sprite))]
-    (p/merge! sprite {:anchor {:x 0.5 :y 0}
-                      :scale {:x (/ world-height texture-height)
-                              :y (/ world-height texture-height)}})
+    (p/assign! sprite {:anchor {:x 0 :y 0}
+                       :scale {:x (/ world-height texture-height)
+                               :y (/ world-height texture-height)}})
     (conj! bg-layer sprite)))
 
 (defn pad-hit-area! [target pad-x pad-y]
@@ -216,7 +217,7 @@
 (defmethod start-scene :sensei [{}]
   (let [speler (sprite :sensei)
         achtergrond (sprite :cliffs)]
-    (p/merge! speler {:x 500
+    (p/assign! speler {:x 500
                       :y 500
                       :anchor {:x 0.5 :y 0.5}
                       :scale {:x 0.1 :y 0.1}})
@@ -236,22 +237,22 @@
     (doseq [k [:ruimteschip :loding :batterij :kogel
                :pijl-links :pijl-rechts :pijl-schiet]]
       (doto (make-sprite! k (j/get (:textures minispel) (str (name k) ".png")))
-        (p/merge! {:anchor {:x 0.5 :y 0.5}})))
-    (p/merge! (sprite :ruimteschip) {:scale {:x 0.5 :y 0.5}})
+        (p/assign! {:anchor {:x 0.5 :y 0.5}})))
+    (p/assign! (sprite :ruimteschip) {:scale {:x 0.5 :y 0.5}})
     (doseq [x (range 8)
             y (range 3)]
       (let [sprite (make-sprite! [:virus x y] (j/get (:textures minispel) "virus.png"))
             scale (+ 0.7 (* 0.2 (rand)))]
-        (p/merge! sprite {:anchor {:x 0.5 :y 0.5} :scale {:x scale :y scale}})))))
+        (p/assign! sprite {:anchor {:x 0.5 :y 0.5} :scale {:x scale :y scale}})))))
 
 (defn schiet-kogel! []
   (let [schip (sprite :ruimteschip)
         kogel (sprite :kogel)]
     (when (or (not (contains? sprite-layer kogel)) (<= (:y kogel) 0))
-      (p/merge! kogel (doto {:x (:x schip)
-                             :y (- (:y schip) 110)
-                             :vy -10
-                             :visible true} prn))
+      (p/assign! kogel {:x (:x schip)
+                        :y (- (:y schip) 110)
+                        :vy -10
+                        :visible true})
       (conj! sprite-layer kogel))))
 
 (defmethod start-scene :space-invaders [_]
@@ -281,24 +282,24 @@
       (p/listen! links e #(j/assoc! schip :vx 0))
       (p/listen! rechts e #(j/assoc! schip :vx 0)))
 
-    (p/merge! virussen {:x 0 :vx 2})
+    (p/assign! virussen {:x 0 :vx 2})
 
     (scene-swap! assoc :virussen virussen)
 
     (doseq [x (range 8)
             y (range 3)
             :let [sprite (sprite [:virus x y])]]
-      (p/merge! sprite {:x (+ -400 (* 100 x))
-                        :y (+ 100 (* 100 y))})
+      (p/assign! sprite {:x (+ -400 (* 100 x))
+                         :y (+ 100 (* 100 y))})
       (conj! virussen sprite))
 
     (conj! sprite-layer virussen schip links rechts schiet)
 
-    (p/merge! schip {:x 0 :y 850})
+    (p/assign! schip {:x 0 :y 850})
 
-    (p/merge! links {:x -650 :y 930 :interactive true})
-    (p/merge! rechts {:x -500 :y 930 :interactive true})
-    (p/merge! schiet {:x 550 :y 900 :interactive true})
+    (p/assign! links {:x -650 :y 930 :interactive true})
+    (p/assign! rechts {:x -500 :y 930 :interactive true})
+    (p/assign! schiet {:x 550 :y 900 :interactive true})
     nil))
 
 (defmethod tick-scene :space-invaders [{:keys [delta virussen keys]}]
@@ -325,7 +326,7 @@
             y (range 3)
             :let [virus (sprite [:virus x y])]]
       (when (and (:visible kogel) (p/rect-overlap? kogel virus))
-        (p/merge! kogel {:visible false})
+        (p/assign! kogel {:visible false})
         (disj! sprite-layer kogel)
         (disj! virussen virus)))))
 
@@ -334,50 +335,67 @@
 
 (def mm-svg-url "images/maniac-mansion-achtegronden.svg")
 
+(defn build-rooms [base-texture elements]
+  (let [{rooms      :room
+         obstacles  :obstacle
+         collisions :collision
+         :as        groups}
+        (group-by :type (vals elements))]
+    (into {}
+          (map
+           (juxt :id
+                 (fn [{:keys [id rect]}]
+                   (let [obstacles       (->> obstacles
+                                              (filter (comp #{id} :for))
+                                              (map :path))
+                         ratio           (/ world-height (:height rect))
+                         width           (* (:width rect) ratio)
+                         player-coll-obj (collisions/Circle. 0 0 20)
+                         collission-sys  (conj! (collisions/system) player-coll-obj)]
+                     {:id              id
+                      :sprite          (p/sprite (p/texture base-texture rect))
+                      :ratio           ratio
+                      :width           width
+                      :player-coll-obj player-coll-obj
+                      :collision-sys   (reduce (fn [sys {:keys [rect action]}]
+                                                 (conj! sys
+                                                        (doto (collisions/rectangle
+                                                               (* (:x rect) ratio) (* (:y rect) ratio)
+                                                               (* (:width rect) ratio) (* (:height rect) ratio))
+                                                          (j/assoc! :action action))))
+                                               collission-sys
+                                               (filter (comp #{id} :origin) collisions))
+                      :mesh            (reduce
+                                        (fn [mesh path]
+                                          (run! #(m/!v* % ratio) path)
+                                          (conj! mesh (daedalus/polygon (map (juxt :x :y) path)))
+                                          mesh)
+                                        (daedalus/build-rect-mesh width world-height)
+                                        obstacles)}))))
+          rooms)))
+
 (defmethod load-scene :mm [scene]
   (promise/let [{:keys [jacko]} (p/load-resources! app {:jacko (:jacko images)})
                 svg (svg/fetch-svg mm-svg-url)]
     (let [jacko (p/sprite jacko)
 
           elements (svg/elements svg)
-          group    (group-by :type (vals elements))
 
           bg             (:background elements)
-          base           (svg/base-texture (:html-image bg)
-                                           mm-svg-url
-                                           "maniac-mansion")
+          base           (svg/base-texture (:html-image bg) mm-svg-url "maniac-mansion")
           debug-graphics (p/graphics)
           debug-view     (puck-daedalus/simple-view debug-graphics)
 
           player-loc   (daedalus/entity-ai {:x 2000 :y 950 :radius 20})
-          rooms        (into {}
-                             (map
-                              (juxt :id
-                                    (fn [{:keys [id rect]}]
-                                      (let [obstacles (->> (group :obstacle)
-                                                           (filter (comp #{id} :for))
-                                                           (map :path))
-                                            ratio     (/ 1000 (:height rect))
-                                            width     (* (:width rect) ratio)]
-                                        {:id     id
-                                         :sprite (p/sprite (p/texture base rect))
-                                         :width  width
-                                         :mesh   (reduce
-                                                  (fn [mesh path]
-                                                    (run! #(m/!v* % ratio) path)
-                                                    (conj! mesh (daedalus/polygon (map (juxt :x :y) path)))
-                                                    mesh)
-                                                  (daedalus/build-rect-mesh width 1000)
-                                                  obstacles)}))))
-                             (group :room))
+          rooms        (build-rooms base elements)
           initial-room :hallway
           path         #js [2000 950]]
-      (p/merge! jacko {:scale  {:x 0.2 :y 0.2}
-                       :anchor {:x 0.5 :y 1}})
-      (p/merge! debug-graphics {:x (- (/ (:width (get rooms initial-room)) 2))})
+      (p/assign! jacko {:scale  {:x 0.2 :y 0.2}
+                        :anchor {:x 0.5 :y 1}})
       (assoc scene
              :room initial-room
              :player-loc player-loc
+             :elements elements
              :jacko jacko
              :path path
              :path-finder (daedalus/path-finder {:entity player-loc
@@ -401,35 +419,64 @@
 
 (def debug-count (atom 0))
 
-(defmethod tick-scene :mm [{:keys [jacko delta path-sampler player-loc path rooms room debug-view debug?]}]
-  #_  (walk-step jacko delta 2)
+(def coll-res (collisions/Result.))
+
+(defn clamp [minv v maxv]
+  (min (max minv v) maxv))
+
+(defmethod tick-scene :mm [{:keys [delta jacko elements
+                                   path-finder path-sampler player-loc path
+                                   debug-graphics debug-view
+                                   rooms room
+                                   debug?]
+                            :as scene-state}]
   (let [room (get rooms room)]
     (.next path-sampler)
     (let [room-width (:width room)
-          mesh (:mesh room)]
-      (when-let [x (:x player-loc)] (j/assoc! jacko :x (- x (/ room-width 2))))
+          {:keys [mesh collision-sys player-coll-obj]} room]
+      (when-let [x (:x player-loc)] (j/assoc! jacko :x x))
       (when-let [y (:y player-loc)] (j/assoc! jacko :y y))
       (when (and debug? (= 0 (mod (swap! debug-count inc) 10)))
         (daedalus/clear debug-view)
         (daedalus/draw-mesh debug-view mesh)
         (daedalus/draw-entity debug-view player-loc)
-        (daedalus/draw-path debug-view path)))
+        (daedalus/draw-path debug-view path)
+        (.draw collision-sys debug-graphics))
 
-    (let [viewport-limit (/ (- (:width (p/local-bounds bg-layer)) (visible-world-width)) 2)]
-      (when (and (< 300 (+ (:x jacko) (:x viewport)))
-                 (< (- (:x viewport)) viewport-limit))
-        ;; Pan viewport to the right
-        (j/assoc! viewport :x (- 300 (:x jacko))))
-      (when (and (< (+ (:x jacko) (:x viewport)) -300)
-                 (< (:x viewport) viewport-limit))
-        ;; Pan viewport to the left
-        (j/assoc! viewport :x (- (- (:x jacko)) 300))))))
+      ;; Keep the viewport centered on Jacko, clamping on the sides. Note that
+      ;; our "viewport" works by shifting a base layer in the opposite
+      ;; direction, so movements are negative
+      (let [bg-width (:width (p/local-bounds bg-layer))
+            viewport-max (visible-world-width)]
+        (j/assoc! viewport :x (- (clamp 0
+                                        (- (:x jacko) (/ viewport-max 2))
+                                        (- bg-width viewport-max)))))
+
+      (j/assoc! player-coll-obj :x (:x player-loc) :y (:y player-loc))
+      (collisions/update! collision-sys)
+      (doseq [obj (collisions/potentials player-coll-obj)
+              :when (collisions/collides? player-coll-obj obj coll-res)]
+        (let [[_goto-room room target] (.-action obj)
+              {:keys [ratio width mesh]} (get rooms room)
+              rect (get-in elements [target :rect])
+              _ (prn [target (contains? elements target) rect])
+              player-x (* (+ (:x rect) (/ (:width rect) 2)) ratio)
+              player-y (* (+ (:y rect) (:height rect)) ratio)]
+          (stop-scene scene-state)
+          (scene-swap! assoc :room room)
+          (j/assoc! player-loc :x (+ player-x (/ (:width room) 2)) :y player-y)
+          (j/assoc! jacko :x player-x :y player-y)
+          (j/assoc! path-finder mesh)
+          (daedalus/find-path path-finder (+ player-x (/ (:width room) 2)) player-y)
+          (daedalus/reset path-sampler)
+          (start-scene (assoc scene-state :room room)))))))
+
 
 (defmethod handle-event :mm [{:keys [jacko path-finder path-sampler path rooms room]} [t e]]
   (let [room-width (-> rooms room :width)
         coords (if (:clientX e) e (first (:touches e)))
         destination (viewport->world (m/point (:clientX coords) (:clientY coords)))]
-    (daedalus/find-path path-finder (+ (:x destination) (/ room-width 2)) (:y destination) path)
+    (daedalus/find-path path-finder (:x destination) (:y destination) path)
     (daedalus/reset path-sampler)
     #_(j/assoc! jacko :destination destination)))
 

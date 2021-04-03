@@ -164,13 +164,12 @@
     (cond-> element
       (:path element)
       (update :path (fn [path]
-                      (prn path)
                       (map #(math/v- % offset) path)))
       (:rect element)
       (update :rect (fn [r]
                       (-> r
                           (update :x - x)
-                          (update :y - x)))))))
+                          (update :y - y)))))))
 
 (defn adjust-origins
   "When an element has an `:origin` key in its EDN metadata pointing at the ID of

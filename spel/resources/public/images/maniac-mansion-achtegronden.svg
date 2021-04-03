@@ -42,9 +42,9 @@
      inkscape:window-height="2083"
      id="namedview4"
      showgrid="false"
-     inkscape:zoom="5.5275547"
-     inkscape:cx="259.32427"
-     inkscape:cy="301.44926"
+     inkscape:zoom="2.7637774"
+     inkscape:cx="283.51043"
+     inkscape:cy="273.01697"
      inkscape:window-x="1920"
      inkscape:window-y="0"
      inkscape:window-maximized="1"
@@ -77,7 +77,10 @@
        width="473.34744"
        height="119.84372"
        x="10.250672"
-       y="464.85251" />
+       y="464.85251">
+      <desc
+         id="desc864">{:type :room}</desc>
+    </rect>
     <rect
        style="fill:#ff0000;fill-opacity:0.337206;stroke:#0000ff;stroke-width:1.00157475;stroke-miterlimit:4;stroke-dasharray:none;stop-color:#000000"
        id="hallway"
@@ -90,9 +93,9 @@
     </rect>
     <path
        style="fill:none;stroke:#000000;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
-       d="m 32.336222,255.49758 54.786085,0.0265 -0.287414,-9.10692 23.450077,0.0113 -0.29118,9.10664 277.5158,0.13429 41.94725,6.60637 14.36664,-0.1179 -44.53466,-90.4214 0.33798,-6.42356 -391.2863058,-0.29868 0.01038,105.2647 z"
+       d="m 32.336222,255.49758 54.786085,0.0265 -0.03157,-59.10692 23.194233,0.0113 -0.29118,59.10664 55.91582,0.0271 -0.41664,-60.43433 25.24955,0.0122 -0.14625,60.43405 196.91332,0.0953 41.94725,6.60637 14.36664,-0.1179 -44.53466,-90.4214 0.33798,-6.42356 -391.2863098,-0.29868 0.01038,105.2647 z"
        id="hallway-walls-obstacle"
-       sodipodi:nodetypes="ccccccccccccc">
+       sodipodi:nodetypes="ccccccccccccccccc">
       <desc
          id="desc850">{:type :obstacle
  :for :hallway
@@ -116,20 +119,25 @@
        y="615.15771" />
     <rect
        style="opacity:1;fill:#ff0000;fill-opacity:0.337206;stroke:#0000ff;stroke-width:1;stroke-miterlimit:4;stroke-dasharray:none;stop-color:#000000"
-       id="rect910"
+       id="doctors-office"
        width="221.27116"
        height="120.68913"
        x="16.15539"
-       y="15.166202" />
+       y="15.166202">
+      <desc
+         id="desc862">{:type :room}</desc>
+    </rect>
     <rect
        style="fill:#800000;stroke:#00ff00;stroke-width:1;stroke-miterlimit:4;stroke-dasharray:none;stop-color:#000000"
-       id="hallway-_gallery"
-       width="21.41338"
-       height="7.3980813"
-       x="88.580406"
-       y="248.13702">
+       id="hallway-to-gallery"
+       width="21.939974"
+       height="58.726398"
+       x="88.05381"
+       y="196.80867">
       <desc
-         id="desc874">{:type :collision}</desc>
+         id="desc874">{:type :collision
+ :origin :hallway
+ :action [:goto-room :gallery]}</desc>
     </rect>
     <rect
        style="fill:none;stroke:#00ff00;stroke-width:1;stroke-miterlimit:4;stroke-dasharray:none;stop-color:#000000"
@@ -140,6 +148,52 @@
        y="315.31934">
       <desc
          id="desc872">{:type :room}</desc>
+    </rect>
+    <rect
+       style="fill:#800000;stroke:#00ff00;stroke-width:0.999997;stroke-miterlimit:4;stroke-dasharray:none;stop-color:#000000"
+       id="hallway-to-kitchen"
+       width="22.674656"
+       height="59.305038"
+       x="166.7099"
+       y="195.82541">
+      <desc
+         id="desc854">{:type :collision
+ :origin :hallway
+ :action [:goto-room :kitchen :kitchen-to-hallway]}</desc>
+    </rect>
+    <rect
+       style="fill:#800000;stroke:#00ff00;stroke-width:0.999997;stroke-miterlimit:4;stroke-dasharray:none;stop-color:#000000"
+       id="hallway-to-doctors-office"
+       width="37.365051"
+       height="11.575528"
+       x="399.25296"
+       y="165.54314">
+      <desc
+         id="desc858">{:type :collision
+ :origin :hallway
+ :action [:goto-room :doctors-office]}</desc>
+    </rect>
+    <path
+       style="fill:none;stroke:#000000;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+       d="m 15.898021,581.30946 -0.335988,-70.7372 15.722407,-0.0555 0.326993,63.28281 2.649316,0.2411 5.002917,-3.08804 47.108146,0.36295 0.400543,4.17205 32.123725,-0.25237 0.19312,1.4655 47.18933,-0.32768 0.19188,-1.28379 204.63424,0.0768 2.50938,1.44477 47.4246,-0.0905 -0.14054,-5.12427 30.87028,-0.51703 4.37636,2.48095 2.19089,-0.10805 16.53942,6.88128 0.14148,1.52258 8.58159,3.04036 V 464.85251 H 10.250672 v 119.84372 0 z"
+       id="kitchen-obstacle"
+       sodipodi:nodetypes="ccccccccccccccccccccccccccc">
+      <desc
+         id="desc877">{:type :obstacle
+ :origin :kitchen
+ :for :kitchen}</desc>
+    </path>
+    <rect
+       style="fill:none;stroke:#00ff00;stop-color:#000000"
+       id="kitchen-to-hallway"
+       width="14.71666"
+       height="65.440483"
+       x="16.307684"
+       y="511.39334">
+      <desc
+         id="desc875">{:type :collision
+ :origin :kitchen
+ :action [:goto-room :hallway :hallway-to-kitchen]}</desc>
     </rect>
   </g>
 </svg>
