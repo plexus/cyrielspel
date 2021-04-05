@@ -5,10 +5,12 @@
             [lambdaisland.glogi.console :as glogi-console]
             [spel.engine :as engine]
             [spel.maniac-mansion]
-            [spel.space-invaders]))
+            [spel.space-invaders]
+            [spel.invasie]))
 
 spel.space-invaders/no-clean-ns
 spel.maniac-mansion/no-clean-ns
+spel.invasie/no-clean-ns
 
 (glogi-console/install!)
 (log/set-levels {:glogi/root :all})
@@ -21,10 +23,14 @@ spel.maniac-mansion/no-clean-ns
 
 (defonce init-once (promise/do
                      (engine/init!)
-                     (engine/goto-scene :maniac-mansion
+                     (engine/goto-scene :invasie
+                                        #_:maniac-mansion
                                         #_:space-invaders)))
 
 (defn on-hot-reload []
   (log/info :hot-reload! {})
   (engine/stop-scene (engine/scene-state))
   (engine/start-scene (engine/scene-state)))
+
+(comment
+  (engine/goto-scene :maniac-mansion))

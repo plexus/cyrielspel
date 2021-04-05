@@ -6,12 +6,12 @@
 
 (add-tap #'p/submit) ; Add portal as a tap> target
 
-(tap> :hello) ; Start tapping out values
+;; (tap> :hello) ; Start tapping out values
 
-(p/clear) ; Clear all values
+;; (p/clear) ; Clear all values
 
-(tap> :world) ; Tap out more values
+;; (tap> :world) ; Tap out more values
 
-(remove-tap #'p/submit) ; Remove portal from tap> targetset
+;; (remove-tap #'p/submit) ; Remove portal from tap> targetset
 
-(p/close) ; Close the inspector when done
+;; (p/close) ; Close the inspector when done

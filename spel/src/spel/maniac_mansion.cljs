@@ -11,7 +11,7 @@
                                  scene-swap! sprite-layer start-scene
                                  stop-scene tick-scene viewport
                                  viewport->world visible-world-width
-                                 world-height]]
+                                 world-height clamp]]
             [spel.svg :as svg]))
 
 (def mm-svg-url "images/maniac-mansion-achtegronden.svg")
@@ -115,9 +115,6 @@
 
 (def coll-res (collisions/Result.))
 
-(defn clamp [minv v maxv]
-  (min (max minv v) maxv))
-
 (defn player-collisions [{:keys [x y]}
                          {:keys [collision-sys player-coll-obj]}]
   (j/assoc! player-coll-obj :x x :y y)
@@ -165,7 +162,7 @@
 
 (defmethod handle-event :maniac-mansion [{:keys [player path-handler rooms room]} [t e]]
   (let [coords (if (:clientX e) e (first (:touches e)))
-        destination (viewport->world (m/point (:clientX coords)
+        destination (viewport->world (p/point (:clientX coords)
                                               (:clientY coords)))]
     (daedalus/set-destination path-handler (:x destination) (:y destination))))
 

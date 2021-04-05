@@ -193,3 +193,12 @@
 (defn move-sprite [sprite delta]
   (j/update! sprite :x + (* (j/get sprite :vx 0) delta))
   (j/update! sprite :y + (* (j/get sprite :vy 0) delta)))
+
+(defn clamp [minv v maxv]
+  (min (max minv v) maxv))
+
+(def coll-res (collisions/Result.))
+(defn filter-collisions [coll-obj system]
+  (collisions/update! system)
+  (seq (filter #(collisions/collides? coll-obj % coll-res)
+               (collisions/potentials coll-obj))))

@@ -3,7 +3,8 @@
             [applied-science.js-interop :as j]
             [cljs.reader :as edn]
             [clojure.string :as str]
-            [kitchen-async.promise :as p]
+            [kitchen-async.promise :as promise]
+            [lambdaisland.puck :as p]
             [lambdaisland.puck.math :as math]))
 
 (defprotocol Coercions
@@ -29,12 +30,12 @@
 (defn fetch-svg
   "Given a URL to an SVG file, return a Promise of the root of the SVG DOM tree."
   [url]
-  (p/let [res (js/fetch url)
-          txt (.text res)
-          div (doto (js/document.createElement "div")
-                (j/assoc! :style "display:none"))]
+  (promise/let [res (js/fetch url)
+                txt (.text res)
+                div (js/document.createElement "div")]
     (set! (.-innerHTML div) txt)
-    (first (.-children div))))
+    (doto (first (.-children div))
+      (j/assoc! :source-url url))))
 
 (defn svg-image->html-img
   "Given an svg <image> element (SVGImageElement), return a equivalent
@@ -53,28 +54,31 @@
   [html-image url name]
   (j/get (pixi/Texture.fromLoader html-image url name) :baseTexture))
 
+(defn attr [el a]
+  (.getAttribute el a))
+
 (defn svg-rect->pixi
   "Get a pixi Rectangle for a given SVGRectElement (`<rect>`)"
   [rect]
-  (pixi/Rectangle. (.getAttribute rect "x")
-                   (.getAttribute rect "y")
-                   (.getAttribute rect "width")
-                   (.getAttribute rect "height")))
+  (pixi/Rectangle. (attr rect "x")
+                   (attr rect "y")
+                   (attr rect "width")
+                   (attr rect "height")))
 
-(defn load-svg
-  "Load an SVG and return Pixi stuff. Assumes the SVG contains a single `<image>`
+#_(defn load-svg
+    "Load an SVG and return Pixi stuff. Assumes the SVG contains a single `<image>`
   tag with a `data:` url, and a number a `<rect>` elements definining the
   bounding boxes of sub-textures."
-  [url name]
-  (p/let [svg (fetch-svg url)]
-    (let [svg-img (query svg "image")
-          html-img (svg-image->html-img svg-img)
-          base (base-texture html-img url name)]
-      {:base-texture base
-       :textures (into {}
-                       (for [rect (query-all svg "rect")]
-                         #_(query (.-parentElement rect) "desc")
-                         [(keyword (.getAttribute rect "id")) (pixi/Texture. base (svg-rect->pixi rect))]))})))
+    [url name]
+    (promise/let [svg (fetch-svg url)]
+      (let [svg-img (query svg "image")
+            html-img (svg-image->html-img svg-img)
+            base (base-texture html-img url name)]
+        {:base-texture base
+         :textures (into {}
+                         (for [rect (query-all svg "rect")]
+                           #_(query (.-parentElement rect) "desc")
+                           [(keyword (attr rect "id")) (pixi/Texture. base (svg-rect->pixi rect))]))})))
 
 (defn path->cmds
   "Low level parsing of an SVG \"path-data\" string.
@@ -99,14 +103,14 @@
   [path-data]
   (loop [[[cmd coords] & cmds] (path->cmds path-data)
          res []
-         pen (math/point 0 0)]
+         pen (p/point 0 0)]
     (if cmd
       (let [relative? (= cmd (str/lower-case cmd))
             point (if relative?
                     (fn [pen [x y]]
-                      (math/v+ (math/point x y) pen))
+                      (math/v+ (p/point x y) pen))
                     (fn [pen [x y]]
-                      (math/point x y)))
+                      (p/point x y)))
             line-to (fn [coords]
                       (cons [(if relative? "l" "L") (flatten coords)]
                             cmds))]
@@ -160,16 +164,22 @@
 
 (defn adjust-origin [{:keys [rect] :as origin} element]
   (let [{:keys [x y]} rect
-        offset (math/point x y)]
-    (cond-> element
+        offset (p/point x y)]
+    (cond
       (:path element)
-      (update :path (fn [path]
-                      (map #(math/v- % offset) path)))
+      (update element :path (fn [path]
+                              (map #(math/v- % offset) path)))
       (:rect element)
-      (update :rect (fn [r]
-                      (-> r
-                          (update :x - x)
-                          (update :y - y)))))))
+      (update element :rect (fn [r]
+                              (-> r
+                                  (update :x - x)
+                                  (update :y - y))))
+
+      (:point element)
+      (update element :point math/v- offset)
+
+      :else
+      element)))
 
 (defn adjust-origins
   "When an element has an `:origin` key in its EDN metadata pointing at the ID of
@@ -180,11 +190,18 @@
         (map (juxt key
                    (comp (fn [el]
                            (if-let [origin (:origin el)]
-                             (do
-                               (adjust-origin (get elements origin) el))
+                             (adjust-origin (get elements origin) el)
                              el))
                          val)))
         elements))
+
+(defn img-add-texture [data el url]
+  (let [id (name (:id data))
+        html-img (svg-image->html-img el)
+        texture  (pixi/Texture.fromLoader html-img (str url "#" id) id)]
+    (assoc data
+           :html-image html-img
+           :texture texture)))
 
 (defn elements
   "Extract SVG elements that have EDN metadata.
@@ -206,36 +223,45 @@
        (keep
         (fn [el]
           (when-let [data (desc-edn el)]
-            (cond-> (assoc data
-                           :id (keyword (.getAttribute el "id"))
-                           :element el
-                           :tag (.-tagName el))
-              (= "path" (.-tagName el))
-              (assoc :path (path->coords (.getAttribute el "d")))
-              (= "rect" (.-tagName el))
-              (assoc :rect (svg-rect->pixi el))
-              (= "image" (.-tagName el))
-              (assoc :html-image (svg-image->html-img el))))))
+            (let [data (assoc data
+                              :id (keyword (attr el "id"))
+                              :element el
+                              :tag (.-tagName el))]
+              (case (.-tagName el)
+                "path"
+                (assoc data :path (path->coords (attr el "d")))
+                "rect"
+                (assoc data :rect (svg-rect->pixi el))
+                "image"
+                (-> data
+                    (assoc :rect (svg-rect->pixi el))
+                    (img-add-texture el (j/get svg :source-url)))
+                "circle"
+                (assoc data
+                       :point (p/point (attr el "cx") (attr el "cy"))
+                       :radius (attr el "r"))
+                #_else
+                data)))))
        (into {} (map (juxt :id identity)))
        (adjust-origins)))
 
 
 
 (comment
-  (p/let [res (fetch-svg "images/maniac-mansion-achtegronden.svg")]
+  (promise/let [res (fetch-svg "images/maniac-mansion-achtegronden.svg")]
     (def ss res))
 
   (tap> (elements ss))
 
   (clojure.datafy/datafy (:rect (second (elements ss))))
 
-  (p/let [res (load-svg "images/maniac-mansion-achtegronden.svg" "maniac-mansion")]
+  (promise/let [res (load-svg "images/maniac-mansion-achtegronden.svg" "maniac-mansion")]
     (def rr res))
 
   (def svg-img (query ss "image"))
   (def html-img (svg-image->html-img svg-img))
 
-  (.getAttribute (query ss "path") "d")
+  (attr (query ss "path") "d")
   (def d "m 10.303405,268.05161 c 2.090292,-1.40839 22.032817,-12.55403 22.032817,-12.55403 l 355.173368,0.17187 41.94725,6.60637 14.36664,-0.1179 -44.53466,-90.4214 0.33798,-6.42356 -391.2863058,-0.29868 0.01038,105.2647 2.8618158,-2.2421 z")
 
   (path->coords d)
@@ -245,7 +271,7 @@
   (def base (base-texture html-img "images/maniac-mansion-achtegronden.svg" "maniac-mansion"))
 
   (desc-edn (query ss "path"))
-  (map (juxt #(.getAttribute % "id") desc-edn identity) (map #(.-parentNode %) (query-all ss "desc")))
+  (map (juxt #(attr % "id") desc-edn identity) (map #(.-parentNode %) (query-all ss "desc")))
 
   (.getType (query ss "desc"))
   (elements ss)
