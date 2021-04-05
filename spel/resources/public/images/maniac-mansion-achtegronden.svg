@@ -45,7 +45,7 @@
      inkscape:zoom="2.7637774"
      inkscape:cx="283.51043"
      inkscape:cy="273.01697"
-     inkscape:window-x="1920"
+     inkscape:window-x="0"
      inkscape:window-y="0"
      inkscape:window-maximized="1"
      inkscape:current-layer="g10"
@@ -137,7 +137,7 @@
       <desc
          id="desc874">{:type :collision
  :origin :hallway
- :action [:goto-room :gallery]}</desc>
+ :action [:goto-room :gallery :gallery-to-hallway]}</desc>
     </rect>
     <rect
        style="fill:none;stroke:#00ff00;stroke-width:1;stroke-miterlimit:4;stroke-dasharray:none;stop-color:#000000"
@@ -171,7 +171,7 @@
       <desc
          id="desc858">{:type :collision
  :origin :hallway
- :action [:goto-room :doctors-office]}</desc>
+ :action [:goto-room :doctors-office :doctors-office-door]}</desc>
     </rect>
     <path
        style="fill:none;stroke:#000000;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
@@ -194,6 +194,30 @@
          id="desc875">{:type :collision
  :origin :kitchen
  :action [:goto-room :hallway :hallway-to-kitchen]}</desc>
+    </rect>
+    <rect
+       style="fill:#800000;stroke:#00ff00;stroke-width:0.999997;stroke-miterlimit:4;stroke-dasharray:none;stop-color:#000000"
+       id="gallery-to-hallway"
+       width="22.674656"
+       height="59.305038"
+       x="347.2515"
+       y="345.94489">
+      <desc
+         id="desc854-6">{:type :collision
+ :origin :gallery
+ :action [:goto-room :hallway :gallery-to-hallway]}</desc>
+    </rect>
+    <rect
+       style="fill:#800000;stroke:#00ff00;stroke-width:0.999997;stroke-miterlimit:4;stroke-dasharray:none;stop-color:#000000"
+       id="doctors-office-door"
+       width="22.674656"
+       height="59.305038"
+       x="95.793037"
+       y="52.13736">
+      <desc
+         id="desc854-6-5">{:type :collision
+ :origin :doctors-office
+ :action [:goto-room :hallway :hallway-to-doctors-office]}</desc>
     </rect>
   </g>
 </svg>
