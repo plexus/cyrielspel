@@ -4,6 +4,7 @@
             [cljs.reader :as edn]
             [clojure.string :as str]
             [kitchen-async.promise :as promise]
+            [lambdaisland.glogi :as log]
             [lambdaisland.puck :as p]
             [lambdaisland.puck.math :as math]))
 
@@ -37,16 +38,37 @@
     (doto (first (.-children div))
       (j/assoc! :source-url url))))
 
+(defn resolve-url
+  ([url]
+   (resolve-url url js/document.baseURI))
+  ([url base]
+   (js/URL. url base)))
+
 (defn svg-image->html-img
   "Given an svg <image> element (SVGImageElement), return a equivalent
   HTMLImageElement."
-  [image]
-  (let [html-image (js/document.createElement "img")]
-    (when-let [width (j/get image :width)]
-      (j/assoc! html-image :width (>num width)))
-    (when-let [height (j/get image :height)]
-      (j/assoc! html-image :height (>num height)))
-    (j/assoc! html-image :src (>str (j/get image :href)))))
+  [image base-url]
+  (log/info :loading-image image)
+  (promise/promise [resolve]
+    (let [html-image (js/Image.) #_(js/document.createElement "img")]
+      (when (= (.-id image) "pleintje")
+        (def pleintje html-image))
+      (j/assoc! html-image
+                :onload (fn []
+                          (log/info :loaded-image {:id (.-id image)
+                                                   :img html-image})
+                          (resolve html-image))
+                :onerror (fn [err]
+                           (log/error :html-image-error err)
+                           (resolve html-image)))
+      (when-let [width (j/get image :width)]
+        (j/assoc! html-image :width (Math/ceil (>num width))))
+      (when-let [height (j/get image :height)]
+        (j/assoc! html-image :height (Math/ceil (>num height))))
+      (j/assoc! html-image :src (resolve-url (>str (j/get image :href)) base-url))
+      (when (j/get html-image :complete)
+        (log/info :already-complete html-image)
+        (resolve html-image)))))
 
 (defn base-texture
   "Create a pixi BaseTexture that can be used to create multiple textures with the
@@ -133,10 +155,10 @@
             (recur cmds points pen))
           ;; Horizontal line
           "H"
-          (recur (line-to (for [x coords] [x 0])) res pen)
+          (recur (line-to (for [x coords] [x (if relative? 0 (:y pen))])) res pen)
           ;; Vertical line
           "V"
-          (recur (line-to (for [y coords] [0 y])) res pen)
+          (recur (line-to (for [y coords] [(if relative? 0 (:x pen)) y])) res pen)
           ;; Quadratic Bezier / Cubic Bezier / Arc : just keep the start/end
           ;; vertices, ignore control points and parameters
           "Q"
@@ -196,12 +218,28 @@
         elements))
 
 (defn img-add-texture [data el url]
-  (let [id (name (:id data))
-        html-img (svg-image->html-img el)
-        texture  (pixi/Texture.fromLoader html-img (str url "#" id) id)]
-    (assoc data
-           :html-image html-img
-           :texture texture)))
+  (promise/let [html-img (svg-image->html-img el (resolve-url url))]
+    (let [id (name (:id data))
+          width (>num (j/get el :width))
+          height (>num (j/get el :height))
+          base-texture (pixi/BaseTexture. html-img
+                                          (j/lit {:scaleMode pixi/settings.SCALE_MODE
+                                                  :resolution 1
+                                                  :width width
+                                                  :height height}))]
+      (prn [width height])
+      (j/assoc-in! base-texture [:resource :url] (str url "#" id))
+      (assoc data
+             :html-image html-img
+             :texture (pixi/Texture. base-texture (pixi/Rectangle. 0 0 width height))
+             :base-texture base-texture))))
+
+#_(defn promise-map
+    "Convert a Map<Key, Promise<Val>> into a Promise<Map<Key,Val>>"
+    [m]
+    (let [ks (keys m)]
+      (promise/let [vs (promise/all (map #(get m %) ks))]
+        (zipmap ks vs))))
 
 (defn elements
   "Extract SVG elements that have EDN metadata.
@@ -218,34 +256,41 @@
   rect elements are parsed to pixi/Point / pixi/Rectangle coordinates and added
   as `:path` / `:rect` respectively."
   [svg]
-  (->> (query-all svg "desc")
-       (map #(.-parentNode %))
-       (keep
-        (fn [el]
-          (when-let [data (desc-edn el)]
-            (let [data (assoc data
-                              :id (keyword (attr el "id"))
-                              :element el
-                              :tag (.-tagName el))]
-              (case (.-tagName el)
-                "path"
-                (assoc data :path (path->coords (attr el "d")))
-                "rect"
-                (assoc data :rect (svg-rect->pixi el))
-                "image"
-                (-> data
-                    (assoc :rect (svg-rect->pixi el))
-                    (img-add-texture el (j/get svg :source-url)))
-                "circle"
-                (assoc data
-                       :point (p/point (attr el "cx") (attr el "cy"))
-                       :radius (attr el "r"))
-                #_else
-                data)))))
-       (into {} (map (juxt :id identity)))
-       (adjust-origins)))
-
-
+  (let [elements
+        (->> (query-all svg "desc")
+             (map #(.-parentNode %))
+             (keep
+              (fn [el]
+                (when-let [data (desc-edn el)]
+                  (let [data (assoc data
+                                    :id (keyword (attr el "id"))
+                                    :element el
+                                    :tag (.-tagName el))]
+                    (case (.-tagName el)
+                      "path"
+                      (assoc data :path (path->coords (attr el "d")))
+                      "rect"
+                      (assoc data :rect (svg-rect->pixi el))
+                      "image"
+                      (-> data
+                          (assoc :rect (svg-rect->pixi el))
+                          (img-add-texture el (j/get svg :source-url)))
+                      "circle"
+                      (assoc data
+                             :point (p/point (attr el "cx") (attr el "cy"))
+                             :radius (attr el "r"))
+                      "ellipse"
+                      (assoc data
+                             :point (p/point (attr el "cx") (attr el "cy"))
+                             :radius-x (attr el "rx")
+                             :radius-y (attr el "ry")
+                             :radius (/ (+ (attr el "rx") (attr el "ry")) 2))
+                      #_else
+                      data))))))]
+    (promise/let [elements (promise/all elements)]
+      (->> elements
+           (into {} (map (juxt :id identity)))
+           (adjust-origins)))))
 
 (comment
   (promise/let [res (fetch-svg "images/maniac-mansion-achtegronden.svg")]

@@ -3,6 +3,7 @@
             [applied-science.js-interop :as j]
             [kitchen-async.promise :as promise]
             [lambdaisland.daedalus :as daedalus]
+            [lambdaisland.glogi :as log]
             [lambdaisland.puck :as p]
             [lambdaisland.puck.collisions :as collisions]
             [lambdaisland.puck.daedalus :as puck-daedalus]
@@ -29,7 +30,7 @@
         player-scale (/ player-size (:height (:texture player)))]
     (p/assign! player {:scale {:x player-scale :y player-scale}})))
 
-(defn build-collision-system [rect player-collision-object collisions]
+(defn build-collision-system [player-collision-object collisions]
   (let [sys (collisions/system)]
     (conj! sys player-collision-object)
     (reduce (fn [sys {:keys [rect path action] :as coll}]
@@ -38,7 +39,14 @@
                              rect
                              (collisions/rectangle rect)
                              path
-                             (collisions/polygon 0 0 path))
+                             (let [x (apply min (map :x path))
+                                   y (apply min (map :y path))]
+                               (collisions/polygon x y (cond-> (map #(-> %
+                                                                         (update :x - x)
+                                                                         (update :y - y))
+                                                                    path)
+                                                         (not (m/clockwise? path))
+                                                         reverse))))
                        (j/assoc! :action action))))
             sys
             collisions)))
@@ -78,7 +86,12 @@
                                    (scale-to-room ratio))
              collision-objs   (->> elements
                                    (filter (comp #{:collision} :type))
-                                   (map (fn [obj] (update obj :path #(scale-to-room ratio %)))))
+                                   (map (fn [obj]
+                                          (cond-> obj
+                                            (:path obj)
+                                            (update :path #(scale-to-room ratio %))
+                                            (:rect obj)
+                                            (update :rect #(scale-to-room ratio %))))))
              player-size      (some #(when (= :player-size (:type %))
                                        (:rect %))
                                     elements)
@@ -90,22 +103,34 @@
           :player-collision player-collision
           :player-size      (when player-size
                               (* (:height player-size) ratio))
-          :collision-sys    (build-collision-system (scale-to-room ratio rect)
-                                                    player-collision
-                                                    collision-objs)
+          :collision-sys    (build-collision-system player-collision collision-objs)
+          :obstacles        obstacles
           :mesh             (build-mesh width obstacles)})))))
 
 (defn wait-for-textures [textures]
+  (log/debug :wait-for-textures textures)
   (promise/all
    (for [txt textures]
-     (promise/promise [resolve]
-       (.. txt -baseTexture (once "loaded" resolve))))))
+     (do
+       (log/debug :waiting-for txt)
+
+       (promise/promise [resolve]
+         (.. txt -baseTexture (once "loaded" (fn [txt]
+                                               (log/debug :texture-ready txt)
+                                               (resolve txt))))
+         (when (.. txt -baseTexture -_textureID)
+           (log/debug :texture-already-loaded (.. txt -_textureID))
+           (resolve)
+           ))))))
 
 (defmethod load-scene :invasie [scene]
   (promise/let [svg (svg/fetch-svg svg-url)
+                _ (log/debug :svg-fetched :ok)
                 elements (svg/elements svg)
-                _ (wait-for-textures (->> elements vals (keep :texture)))]
-
+                _ (log/debug :elements elements)
+                ;;       _ (wait-for-textures (->> elements vals (keep :texture)))
+                _ (log/debug :got-textures :ok)]
+    (log/info :invasie/loaded-svg {})
     (let [start      (:start elements)
           sprites    (->> elements
                           vals
@@ -145,7 +170,7 @@
 
 (let [debug-count (atom 0)]
   (defn debug-draw [{:keys [debug-graphics path-handler]}
-                    {:keys [collision-sys player-collision]}]
+                    {:keys [collision-sys]}]
     (when (and debug? (= 0 (mod (swap! debug-count inc) 10)))
       (daedalus/debug-draw path-handler)
       (.draw collision-sys debug-graphics))))
@@ -170,11 +195,13 @@
     ;; direction, so movements are negative
     (let [bg-width (:width (p/local-bounds bg-layer))
           viewport-max (visible-world-width)]
-      (pan-viewport (clamp 0
-                           (- (:x player) (/ viewport-max 2))
-                           (- bg-width viewport-max))))
+      (if (< bg-width viewport-max)
+        (pan-viewport (- (/ bg-width 2)))
+        (pan-viewport (clamp 0
+                             (- (:x player) (/ viewport-max 2))
+                             (- bg-width viewport-max)))))
     ;; set col-obj x y
-    (if-let [[obj] (doall (filter-collisions player-collision collision-sys))]
+    (if-let [[obj :as collisions] (doall (filter-collisions player-collision collision-sys))]
       (when (not pause-collisions?)
         (let [[_action room target] (.-action obj)
               {:keys [ratio width mesh]} (get rooms room)
